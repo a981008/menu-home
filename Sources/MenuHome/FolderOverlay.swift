@@ -84,7 +84,8 @@ struct FolderOverlay: View {
 // MARK: - 文件夹卡片分页网格
 
 /// iPhone 同款：卡片固定 3 列 × 3 行，App 从左上角排起；
-/// 超过 9 个分页（横滑或点页点），卡片高度恒定、内容永远完整显示
+/// 超过 9 个分页（横滑或点页点），卡片高度恒定、内容永远完整显示；
+/// 卡片内可拖动排序，拖出卡片 = 移出文件夹回到桌面
 private struct FolderPagedGrid: View {
     let items: [HomeItem]
     let folderID: UUID
@@ -95,11 +96,29 @@ private struct FolderPagedGrid: View {
     private let cellH: CGFloat = 80
     private let cardInnerWidth: CGFloat = 374 - 28   // 卡片左右各 14pt 内边距
 
+    // 卡片内拖拽会话（手工脱糖 @State）
+    private var _dragItem: State<HomeItem?> = State(initialValue: nil)
+    private var dragItem: HomeItem? {
+        get { _dragItem.wrappedValue }
+        nonmutating set { _dragItem.wrappedValue = newValue }
+    }
+    private var _dragPoint: State<CGPoint?> = State(initialValue: nil)
+    private var dragPoint: CGPoint? {
+        get { _dragPoint.wrappedValue }
+        nonmutating set { _dragPoint.wrappedValue = newValue }
+    }
+
     private var perPage: Int { cols * rowsPerPage }
     private var pageCount: Int { max(1, (items.count + perPage - 1) / perPage) }
     private var page: Int { min(max(store.folderPage, 0), pageCount - 1) }
     private var pageHeight: CGFloat {
         CGFloat(rowsPerPage) * cellH + CGFloat(rowsPerPage - 1) * 10
+    }
+
+    /// 拖动中：光标所在格在本页内的偏移（卡片外为 nil）
+    private var highlightOffset: Int? {
+        guard dragItem != nil, let pt = dragPoint else { return nil }
+        return localIndex(at: pt)
     }
 
     var body: some View {
@@ -115,7 +134,15 @@ private struct FolderPagedGrid: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.85), value: page)
                 .contentShape(Rectangle())
                 .gesture(swipeGesture)
+
+                // 卡片内拖影
+                if let di = dragItem, let pt = dragPoint {
+                    ghost(for: di)
+                        .position(pt)
+                        .allowsHitTesting(false)
+                }
             }
+            .coordinateSpace(name: "folderCard")
             .frame(width: cardInnerWidth, height: pageHeight, alignment: .top)
             .clipped()
 
@@ -135,6 +162,59 @@ private struct FolderPagedGrid: View {
         .padding(.bottom, 12)
     }
 
+    // MARK: - 卡片内拖拽
+
+    private func handleDrag(itemID: String, pt: CGPoint) {
+        if dragItem == nil, let it = items.first(where: { $0.id == itemID }) {
+            dragItem = it
+        }
+        dragPoint = pt
+    }
+
+    private func handleDrop(item: HomeItem, pt: CGPoint) {
+        defer { dragItem = nil; dragPoint = nil }
+        guard let di = dragItem, di.id == item.id else { return }
+        if let li = localIndex(at: pt) {
+            // 卡片内：放到光标格（绝对位置 = 页偏移 + 页内偏移）
+            store.moveWithinFolder(folderID: folderID, itemID: di.id,
+                                   toLocalIndex: page * perPage + li)
+        } else {
+            // 拖出卡片：移出文件夹，回到桌面末尾
+            store.removeFromFolder(itemID: di.id, folderID: folderID)
+        }
+    }
+
+    /// 光标 → 本页内格子偏移；在卡片外返回 nil
+    private func localIndex(at pt: CGPoint) -> Int? {
+        guard pt.x >= 0, pt.y >= 0, pt.x < cardInnerWidth, pt.y < pageHeight else { return nil }
+        let cellW = (cardInnerWidth - 20) / 3
+        let col = min(cols - 1, max(0, Int(pt.x / (cellW + 10))))
+        let row = min(rowsPerPage - 1, max(0, Int(pt.y / (cellH + 10))))
+        return row * cols + col
+    }
+
+    private func ghost(for item: HomeItem) -> some View {
+        VStack(spacing: 2) {
+            if let e = item.appEntry {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: e.path))
+                    .resizable()
+                    .frame(width: 44, height: 44)
+            } else {
+                Image(systemName: "folder")
+                    .font(.system(size: 30))
+            }
+            Text(item.displayName)
+                .font(.system(size: 10, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .padding(6)
+        .background(RoundedRectangle(cornerRadius: 10).fill(.ultraThinMaterial))
+        .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
+    }
+
+    // MARK: - 页面
+
     /// 一页：3×3 固定尺寸格子，从左上角排起，最后一页留白
     private func pageGrid(_ p: Int) -> some View {
         let slice = Array(items.dropFirst(p * perPage).prefix(perPage))
@@ -143,8 +223,14 @@ private struct FolderPagedGrid: View {
             columns: Array(repeating: GridItem(.fixed(cellW), spacing: 10), count: cols),
             spacing: 10
         ) {
-            ForEach(slice) { item in
-                FolderItemCell(item: item, folderID: folderID, iconSize: 52)
+            ForEach(Array(slice.enumerated()), id: \.element.id) { off, item in
+                let isDragged = dragItem?.id == item.id
+                FolderItemCell(item: item, folderID: folderID, iconSize: 52,
+                               onDragChanged: { pt in handleDrag(itemID: item.id, pt: pt) },
+                               onDragEnded: { pt in handleDrop(item: item, pt: pt) })
+                    .opacity(isDragged ? 0.25 : 1)
+                    .scaleEffect(highlightOffset == off && !isDragged ? 1.08 : 1)
+                    .animation(.spring(response: 0.22, dampingFraction: 0.8), value: highlightOffset)
             }
         }
         .frame(width: cardInnerWidth, height: pageHeight, alignment: .topLeading)
@@ -153,6 +239,7 @@ private struct FolderPagedGrid: View {
     private var swipeGesture: some Gesture {
         DragGesture(minimumDistance: 25)
             .onEnded { v in
+                guard dragItem == nil else { return }   // 正在拖动图标时不翻页
                 if v.translation.width < -30, page < pageCount - 1 {
                     withAnimation { store.folderPage = page + 1 }
                 } else if v.translation.width > 30, page > 0 {
@@ -205,6 +292,8 @@ private struct FolderItemCell: View {
     let item: HomeItem
     let folderID: UUID
     var iconSize: CGFloat = 48
+    var onDragChanged: ((CGPoint) -> Void)? = nil
+    var onDragEnded: ((CGPoint) -> Void)? = nil
     @EnvironmentObject var store: HomeStore
     private var _hovering: State<Bool> = State(initialValue: false)
     private var hovering: Bool {
@@ -251,6 +340,7 @@ private struct FolderItemCell: View {
         .padding(6)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(hovering ? 0.06 : 0)))
         .scaleEffect(hovering && !store.editMode ? 1.04 : 1)
+        .animation(.easeInOut(duration: 0.12), value: hovering)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture {
@@ -263,5 +353,10 @@ private struct FolderItemCell: View {
                 store.removeFromFolder(itemID: item.id, folderID: folderID)
             }
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 6, coordinateSpace: .named("folderCard"))
+                .onChanged { v in onDragChanged?(v.location) }
+                .onEnded { v in onDragEnded?(v.location) }
+        )
     }
 }

@@ -406,16 +406,17 @@ final class HomeStore: ObservableObject {
         guard drag == nil,
               let idx = flatIndexOf(id: itemID),
               let item = item(withID: itemID) else { return }
+        // 提起：从网格中暂时移除（其余图标立即补位，拖动过程零换位）
+        var items = flatItems
+        items.remove(at: idx)
+        setFlat(items)
         drag = DragSession(item: item, originIndex: idx, currentIndex: idx)
     }
 
     /// 拖拽移动中（point 为 homePanel 坐标系）
     func dragMoved(to point: CGPoint, metrics: GridMetrics) {
-        guard drag != nil else { return }
-        if var d = drag {
-            d.point = point
-            drag = d
-        }
+        guard var d = drag else { return }
+        d.point = point
         // 边缘悬停自动翻页
         flipWork?.cancel()
         flipWork = nil
@@ -424,20 +425,14 @@ final class HomeStore: ObservableObject {
         } else if point.x > metrics.pageW - metrics.hPad * 0.9, page < pages.count - 1 {
             scheduleFlip(delta: 1)
         }
-        // 实时让位 + 悬停合并
-        if let idx = metrics.flatIndex(at: point, page: page) {
-            // 先取光标所在格的占用者（live-move 会把拖拽项插进来，之后光标下就是自己了）
-            let items = flatItems
-            let occupantID: String? = idx < items.count ? items[idx].id : nil
-            if let cur = drag?.currentIndex, idx != cur, let id = drag?.itemID {
-                moveItem(id: id, toFlatIndex: idx)
-            }
-            if occupantID == drag?.itemID {
-                // 光标在自己格子上（live-move 后的常态）：保留进行中的合并等待
-            } else {
-                updateMergeHold(targetID: occupantID)
-            }
+        // 光标所在格：拖拽项已提起，占用者稳定不动（合并目标不再漂移）
+        if let idx = metrics.flatIndex(at: point, page: page), idx < flatItems.count {
+            d.currentIndex = idx
+            drag = d
+            updateMergeHold(targetID: flatItems[idx].id)
         } else {
+            d.currentIndex = min(max(d.currentIndex, 0), flatItems.count)
+            drag = d
             cancelMergeHold()
         }
     }
@@ -452,11 +447,16 @@ final class HomeStore: ObservableObject {
         drag = nil
         if let mc = d.mergeCandidateID, mc != d.itemID, let target = item(withID: mc) {
             performMerge(dragged: d.item, target: target)
+            return
         }
-        // 否则 live move 已就位
+        // 放置：插入到光标所在格（该格图标向后让位）
+        var items = flatItems
+        let idx = max(0, min(d.currentIndex, items.count))
+        items.insert(d.item, at: idx)
+        setFlat(items)
     }
 
-    /// 拖拽取消（松手在无效区域）：回原位
+    /// 拖拽取消（松手在无效区域）：放回原位
     func cancelDrag() {
         flipWork?.cancel()
         flipWork = nil
@@ -465,7 +465,9 @@ final class HomeStore: ObservableObject {
         holdTargetID = nil
         guard let d = drag else { return }
         drag = nil
-        moveItem(id: d.itemID, toFlatIndex: d.originIndex)
+        var items = flatItems
+        items.insert(d.item, at: max(0, min(d.originIndex, items.count)))
+        setFlat(items)
     }
 
     private func scheduleFlip(delta: Int) {
@@ -515,19 +517,6 @@ final class HomeStore: ObservableObject {
         }
     }
 
-    private func moveItem(id: String, toFlatIndex target: Int) {
-        guard let from = flatIndexOf(id: id), target != from else { return }
-        var items = flatItems
-        let moved = items.remove(at: from)
-        let idx = max(0, min(target, items.count))
-        items.insert(moved, at: idx)
-        setFlat(items)
-        if var d = drag, d.itemID == id {
-            d.currentIndex = idx
-            drag = d
-        }
-    }
-
     /// 把单个 App 收进一个新文件夹（App 右键菜单「移入新文件夹」）
     func moveIntoNewFolder(itemID: String) {
         guard let idx = flatIndexOf(id: itemID),
@@ -547,28 +536,22 @@ final class HomeStore: ObservableObject {
         addApp(entry, to: .desktopPage(page))
     }
 
-    /// 拖拽合并：app+app 建新文件夹；app 入文件夹；文件夹收 App / 合并文件夹
+    /// 拖拽合并（拖拽项已提起、不在网格中）：app+app 建新夹；app 入夹；夹收 App / 夹并夹
     private func performMerge(dragged: HomeItem, target: HomeItem) {
         var items = flatItems
-        guard let di = items.firstIndex(where: { $0.id == dragged.id }),
-              let ti = items.firstIndex(where: { $0.id == target.id }) else { return }
+        guard let ti = items.firstIndex(where: { $0.id == target.id }) else { return }
         switch (dragged, target) {
         case (.app, .app):
-            items.remove(at: di)
-            guard let t2 = items.firstIndex(where: { $0.id == target.id }) else { return }
-            items[t2] = .folder(FolderEntry(name: "新建文件夹", items: [target, dragged]))
+            items[ti] = .folder(FolderEntry(name: "新建文件夹", items: [target, dragged]))
         case (.app, .folder(var f)):
             f.items.append(dragged)
             items[ti] = .folder(f)
-            items.remove(at: di)
         case (.folder(var f), .app):
             f.items.append(target)
-            items[di] = .folder(f)
-            items.remove(at: ti)
+            items[ti] = .folder(f)
         case (.folder(var f), .folder(let g)):
             f.items.append(contentsOf: g.items)
             items[ti] = .folder(f)
-            items.remove(at: di)
         }
         setFlat(items)
     }

@@ -33,6 +33,7 @@ struct CellView: View {
             }
         }
         .frame(width: metrics.cellW, height: metrics.cellH)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(hovering ? 0.06 : 0)))
         .scaleEffect(isMergeTarget ? 1.15 : (hovering && !store.editMode ? 1.04 : 1))
         .opacity(isDragging ? 0.25 : 1)
         .onHover { hovering = $0 }
