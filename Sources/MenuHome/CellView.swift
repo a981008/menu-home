@@ -46,17 +46,6 @@ struct CellView: View {
         .onTapGesture { tap() }
         .contextMenu { menu }
         .help(item.displayName)
-        .simultaneousGesture(dragGesture)
-        // 长按进入编辑模式（iPhone 桌面同款入口）
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.35)
-                .onEnded { _ in
-                    // 拖拽进行中不切编辑模式：中途的大动画事务会打断手势流（首次拖拽卡住的根因）
-                    guard !store.editMode, store.drag == nil else { return }
-                    withAnimation { store.editMode = true }
-                }
-        )
-        // 悬停缩放 / 合并候选放大动效（设计稿 4.2：120ms）
         .animation(.easeInOut(duration: 0.12), value: hovering)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isMergeTarget)
     }
@@ -79,28 +68,6 @@ struct CellView: View {
         let o = metrics.cellOrigin(row: row, col: col)
         let box = metrics.cellW - 30
         return CGRect(x: o.x + (metrics.cellW - box) / 2, y: o.y, width: box, height: box)
-    }
-
-    // MARK: - 编辑模式拖拽
-
-    /// 拖拽手势（homePanel 坐标系）：任何时候都可拖动排序/合并，无需先进编辑模式
-    private var dragGesture: AnyGesture<DragGesture.Value> {
-        AnyGesture(
-            DragGesture(minimumDistance: 6, coordinateSpace: .named("homePanel"))
-                .onChanged { v in
-                    if store.drag == nil {
-                        store.beginDrag(itemID: item.id)
-                    }
-                    if store.drag != nil {
-                        store.dragMoved(to: v.location, metrics: metrics)
-                    }
-                }
-                .onEnded { _ in
-                    if store.drag != nil {
-                        store.endDrag()
-                    }
-                }
-        )
     }
 
     // MARK: - 右键菜单（见设计稿 4.7）

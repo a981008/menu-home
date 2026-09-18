@@ -28,11 +28,18 @@ struct GridCarousel: View {
             }
             .frame(width: metrics.pageW, height: contentHeight, alignment: .topLeading)
             .coordinateSpace(name: "homePanel")
-            // 兜底拖拽流：拖拽项提起后其格子视图被移除，格子上的手势流可能中断；
-            // 内容层手势宿主在拖拽全程存活，保证移动/松手事件不丢。双路同驱幂等，互不冲突
+            // 拖拽唯一驱动：内容层单一手势全程掌控（按下格提起 → 移动 → 松手落位）。
+            // 宿主在拖拽全程存活，事件绝不丢失；不用格子上的手势（提起即移除宿主，交付不可靠）
             .simultaneousGesture(
                 DragGesture(minimumDistance: 6, coordinateSpace: .named("homePanel"))
                     .onChanged { v in
+                        if store.drag == nil {
+                            // 按下位置所在格的条目提起（空白处按下不启动拖拽）
+                            if let idx = metrics.index(at: v.startLocation),
+                               idx < store.flatItems.count {
+                                store.beginDrag(itemID: store.flatItems[idx].id)
+                            }
+                        }
                         if store.drag != nil {
                             store.dragMoved(to: v.location, metrics: metrics)
                         }

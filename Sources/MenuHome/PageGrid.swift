@@ -9,10 +9,15 @@ struct PageGrid: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // 空白区域：撑满整页，提供右键菜单
+            // 空白区域：撑满整页，提供右键菜单；整理模式下点击空白即退出（iOS 同款）
             Color.clear
                 .contentShape(Rectangle())
                 .contextMenu { blankMenu }
+                .onTapGesture {
+                    if store.editMode {
+                        withAnimation { store.editMode = false }
+                    }
+                }
 
             // 格子：按扁平索引换算行/列，用 .position 放到格子中心
             ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
