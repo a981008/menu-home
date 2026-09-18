@@ -4,6 +4,10 @@
 
 > 设计文档：[docs/ui-design.md](docs/ui-design.md)
 
+<p align="center">
+  <img src="docs/screenshots/home.png" width="420" alt="MenuHome 主面板：桌面网格 + 常驻搜索栏">
+</p>
+
 ## 技术栈
 
 - SwiftUI + AppKit（NSStatusItem / NSPanel / 系统液态玻璃 glassEffect / Carbon 热键）
@@ -34,14 +38,20 @@ bash scripts/make_dmg.sh
 - 状态栏显示**迷你 App 图标**（渐变圆角底 + 白色房子，点开像打开一个 App 的菜单）；点击开/关面板，点击面板外自动收起（non-activating，不打断当前 App）
 - 滚动桌面网格：4 / 5 / 6 列、4 / 5 / 6 行可选，图标小 / 中 / 大三档，更改列数/行数会同时调整面板尺寸；内容超出可视区直接滚动（不分页）
 - 文件夹：拖拽合并创建（或右键 App「移入新文件夹」/ 空白处「新建文件夹」），展开、重命名、移除（内容自动退回桌面）
+  <img src="docs/screenshots/folder.png" width="340" alt="文件夹卡片展开：玻璃卡片居中，支持行内重命名">
 - 拖拽：**随时**拖动图标排序（不必先进编辑模式），拖到图标上悬停片刻合并建文件夹；从 Finder 拖入 .app 即添加到桌面末尾
 - 编辑模式（抖动）：右键「整理桌面…」进入，点击面板空白处或「✓ 完成」退出，纯视觉提示
+  <img src="docs/screenshots/edit-mode.png" width="340" alt="整理模式：顶部编辑条（添加 / 完成），图标抖动提示可拖动排序">
 - 搜索：顶部常驻搜索栏（居中）点击进入，或面板打开时按任意字符直接搜索；覆盖层与「添加 App」同构，空查询列出全部本机 App（含未上桌面的，点击即启动；不含 MenuHome 文件夹）
+  <img src="docs/screenshots/search.png" width="340" alt="搜索覆盖层：App 图标 + 名称 + 路径，点击即启动">
 - 添加 App：扫描本机应用列表加入桌面，可加入文件夹
+  <img src="docs/screenshots/add-app.png" width="340" alt="添加 App 覆盖层：已上桌面的 App 标记「已在桌面」">
 - 运行中 App 圆点指示（可在设置中关闭）
 - 全局热键 ⌥⌘H 随时呼出（可在设置中录制）
 - JSON 持久化：`~/Library/Application Support/MenuHome/layout.json`
 - 导入 / 导出布局 JSON，可手工备份迁移；「重置全部」恢复初始状态
+- 设置窗口：通用（登录启动 / 热键录制 / 启动后收起）/ 外观（列数 / 行数 / 图标大小）/ 数据（导入导出 / 重置）/ 关于
+  <img src="docs/screenshots/settings.png" width="340" alt="设置窗口：通用 / 外观 / 数据 / 关于">
 
 ## 快捷键
 
