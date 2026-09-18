@@ -5,7 +5,7 @@
 
 ## 1. 项目速览
 
-**MenuHome**：常驻 macOS 状态栏的「个人桌面」启动器 —— 像 iPhone 桌面一样收纳常用 App，支持文件夹分类、随时拖拽、3×3 分页文件夹、搜索、Finder 拖入。桌面为**单页滚动网格**（列数/行数 4/5/6 可设，超出可视区滚动，不分页）。
+**MenuHome**：常驻 macOS 状态栏的「个人桌面」启动器 —— 像 iPhone 桌面一样收纳常用 App，支持文件夹分类、随时拖拽、居中文件夹卡片（3 列滚动）、搜索、Finder 拖入。桌面为**单页滚动网格**（列数/行数 4/5/6 可设，超出可视区滚动，不分页）。
 
 - 技术：SwiftUI + AppKit（NSStatusItem + NSPanel），**零第三方依赖**
 - 部署目标：**macOS 26+**（`glassEffect` 等液态玻璃 API 直接可用）；开发机 macOS 27 + CLT 6.4（Apple Swift 6.4，**无完整 Xcode**）
@@ -39,7 +39,7 @@ private var hovering: Bool {
 }
 ```
 
-范本：`CellView._hovering`、`FolderPagedGrid._dragItem/_dragPoint`、`AddAppOverlay`。
+范本：`CellView._hovering`、`FolderOverlay.FolderScrollGrid._dragItem/_dragPoint`、`AddAppOverlay`。
 **不需要**脱糖：`@EnvironmentObject`、`@Published`、`@FocusState`、普通存储属性。
 
 ### 2.3 其他
@@ -83,7 +83,7 @@ Sources/MenuHome/
 ├── HomeView                          面板根：玻璃面板 + 常驻搜索栏（ResidentSearchBar，顶部居中）+ ZStack 覆盖层 + .onDrop(Finder 拖入)
 ├── GridCarousel / PageGrid           滚动容器（单页、注册 "homePanel" 内容坐标系）/ 单页栅格（.position 按 cellOrigin 摆放）
 ├── CellView / AppCellView / FolderCellView   格子（拖拽手势在 CellView）；App 格；文件夹格
-├── FolderOverlay                     文件夹卡片：3×3 分页网格 + 卡片内拖拽 + 行内重命名
+├── FolderOverlay                     文件夹卡片（面板内居中）：3 列滚动网格 + 卡片内拖拽 + 行内重命名
 ├── SearchOverlay / AddAppOverlay     搜索 / 添加 App 覆盖层（同构：顶栏+Divider+行列表；搜索空查询=全量列表）
 ├── EditBar / EmptyStateView / DragGhostView / JiggleModifier
 ├── AppScanner                        递归扫 4 目录（两层）+ 系统 App 本地化名（loctable/strings）
@@ -107,7 +107,7 @@ docs/ui-design.md                     UI 设计文档（v1.0）
    - **性能红线**：光标高频移动只写 `store.ghost`（独立 GhostTracker，只重渲染拖影）与非发布态 `liveIndex`；`@Published` 仅在跨格/合并态等结构变化时更新。鼠标移动事件可达数百 Hz，逐事件发布会让整棵视图树重渲染（卡顿根因）。图标读取一律用 `AppScanner.cachedIcon(forPath:)`（NSCache），别直接调 `NSWorkspace.icon(forFile:)`
 5. **拖拽坐标系**：桌面拖拽的 `"homePanel"` 由 **GridCarousel 的滚动内容**注册 —— 手势坐标随滚动一致；文件夹卡片内拖拽用 `.named("folderCard")`。
 6. **面板开合动画**：`store.panelVisible` + `store.panelAnchor`（状态栏图标在面板上的相对锚点）驱动 scale/opacity；窗口先出现、下一帧置 visible。收起 = 先收缩、0.3s 后 `orderOut` + `resetTransientState()`（`closeWork` 延迟任务；收起途中再点图标会反向弹回）。
-7. **文件夹开合**：`folderSourceRect`（点击时记录的图标矩形）作为动画锚点，卡片 transition 以它缩放展开/缩回；卡片分页用 `store.folderPage`（展开时归零）。
+7. **文件夹开合**：`folderSourceRect`（点击时记录的图标矩形）作为动画锚点，卡片 transition 以它缩放展开/缩回；卡片在面板内**正中**（无偏移），内容超过 3×3 在卡片内滚动（`FolderScrollGrid`，拖拽格子换算要加 `scrollOffset`）。
 8. **持久化**：`~/Library/Application Support/MenuHome/layout.json`（pages + settings，文件夹有稳定 UUID）。**pages 现在恒为单元素数组**（旧多页文件在 load 时扁平迁移）；`AppSettings.init(from:)` 用 decodeIfPresent 兼容旧文件缺字段。拖拽期间落盘会被推迟（`persistPending`），拖拽结束统一补写；写盘在后台队列执行（`persistNow`），别把文件 I/O 挪回主线程。**做会改动布局的自动化测试前先备份该文件，测完还原**。
 9. **UI 文案全部简体中文**，代码注释也用中文。
 10. 新增 `@Published` 瞬态时，确认是否要在 `resetTransientState()` 里复位（面板收起后不留脏状态）。
@@ -116,7 +116,7 @@ docs/ui-design.md                     UI 设计文档（v1.0）
 
 - `NSDictionary` 遍历 key 是 Any：用 `for case let (key as String, sub as [String: Any]) in table`
 - 系统 App 本地化名：先按候选语言读 `InfoPlist.loctable`/`.strings`；`Bundle.localizedInfoDictionary` 只作兜底（它对无中文 strings 的系统 App 会回退英文）；loctable 查路径**不能**带 `forLocalization:`
-- 文件夹卡片横滑翻页 vs 图标拖拽：swipe 的 `onEnded` 里 `guard dragItem == nil`
+- 文件夹卡片内拖拽坐标在卡片空间（"folderCard"），格子换算需加滚动偏移 `scrollOffset`（onScrollGeometryChange 跟踪）
 - `glassEffect` 形状必须用显式 `RoundedRectangle(cornerRadius:style: .continuous)`（`.rect(cornerRadius:)` 在玻璃合成下圆角可能不完整）
 - `NSEvent.momentumPhase` 是 OptionSet：判空用 `!event.momentumPhase.isEmpty`（没有 `.zero`）
 - 终端无屏幕录制权限（TCC），`screencapture` 截不了屏 —— 验证视觉改动靠构建 + 用户确认
@@ -126,6 +126,6 @@ docs/ui-design.md                     UI 设计文档（v1.0）
 - [ ] `./scripts/build_app.sh` 0 error（Sendable 警告可忽略）
 - [ ] 重启后：左键点图标 → 面板从图标位置弹出；点 App 启动；Esc / 点外部收起
 - [ ] 拖动图标排序；拖到另一图标悬停建文件夹；App 多于可视行数时可滚动查看
-- [ ] 文件夹：点开（从图标缩放展开）、卡片内拖动排序、拖出卡片移出、>9 个分页
+- [ ] 文件夹：点开（从图标缩放展开、卡片居中）、卡片内拖动排序、拖出卡片移出、>3×3 卡片内滚动
 - [ ] Finder 拖 .app 入面板；⌥⌘H 全局热键
 - [ ] 设置改列数/行数/图标大小 → 面板尺寸与桌面 / 文件夹卡片 / 缩略图同步变化

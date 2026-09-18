@@ -15,10 +15,10 @@ struct FolderOverlay: View {
     private var cardZoom: AnyTransition {
         let m = store.metrics
         let src = store.folderSourceRect
-        // 卡片最终位置（面板内居中，上移 12pt）
-        let cardH: CGFloat = 44 + 3 * m.cellH + 2 * m.vGap + 30   // 标题 + 3 行网格 + 页点/底距
+        // 卡片最终位置（面板内正中）
+        let cardH: CGFloat = 44 + 3 * m.cellH + 2 * m.vGap + 12   // 标题 + 3 行可视网格 + 底距
         let cardX = (m.pageW - cardWidth) / 2
-        let cardY = (m.panelH - cardH) / 2 - 12
+        let cardY = (m.panelH - cardH) / 2
         guard src.width > 0, src.height > 0 else { return .opacity }
         let ax = min(1, max(0, (src.midX - cardX) / cardWidth))
         let ay = min(1, max(0, (src.midY - cardY) / cardH))
@@ -49,7 +49,6 @@ struct FolderOverlay: View {
             }
             .frame(width: cardWidth)
             .liquidGlass(cornerRadius: Theme.cardRadius)
-            .offset(y: -12)
             .transition(cardZoom)
         }
     }
@@ -80,7 +79,7 @@ struct FolderOverlay: View {
         .frame(height: 44)
     }
 
-    // MARK: - 内容网格（iPhone 式：固定 3×3 一页，图标从左上角排起，>9 个翻页）
+    // MARK: - 内容网格（固定 3 列可视 3 行，从左上角排起，超出在卡片内滚动）
 
     @ViewBuilder
     private func itemArea(folder: FolderEntry) -> some View {
@@ -97,29 +96,32 @@ struct FolderOverlay: View {
             .padding(.vertical, 28)
             .padding(.bottom, 10)
         } else {
-            FolderPagedGrid(items: folder.items, folderID: folder.id)
+            FolderScrollGrid(items: folder.items, folderID: folder.id)
         }
     }
 }
 
-// MARK: - 文件夹卡片分页网格
+// MARK: - 文件夹卡片滚动网格
 
-/// iPhone 同款：卡片固定 3 列 × 3 行，App 从左上角排起；
-/// 超过 9 个分页（横滑或点页点），卡片高度恒定、内容永远完整显示；
+/// 卡片固定 3 列 × 可视 3 行，App 从左上角排起；
+/// 超过 3×3 在卡片内垂直滚动（不再分页），卡片高度恒定；
 /// 卡片内可拖动排序，拖出卡片 = 移出文件夹回到桌面
-private struct FolderPagedGrid: View {
+private struct FolderScrollGrid: View {
     let items: [HomeItem]
     let folderID: UUID
     @EnvironmentObject var store: HomeStore
 
     private let cols = 3
-    private let rowsPerPage = 3
 
     // 与主网格同一套 metrics：格子、间隙、图标尺寸完全一致（跟随设置的图标大小）
     private var metrics: GridMetrics { store.metrics }
     private var iconPt: CGFloat { metrics.cellW - 30 }
     private var cardInnerWidth: CGFloat {
         CGFloat(cols) * metrics.cellW + CGFloat(cols - 1) * metrics.hGap
+    }
+    /// 卡片内可视高度：固定 3 行（其余滚动）
+    private var visibleHeight: CGFloat {
+        3 * metrics.cellH + 2 * metrics.vGap
     }
 
     // 卡片内拖拽会话（手工脱糖 @State）
@@ -133,57 +135,54 @@ private struct FolderPagedGrid: View {
         get { _dragPoint.wrappedValue }
         nonmutating set { _dragPoint.wrappedValue = newValue }
     }
-
-    private var perPage: Int { cols * rowsPerPage }
-    private var pageCount: Int { max(1, (items.count + perPage - 1) / perPage) }
-    private var page: Int { min(max(store.folderPage, 0), pageCount - 1) }
-    private var pageHeight: CGFloat {
-        CGFloat(rowsPerPage) * metrics.cellH + CGFloat(rowsPerPage - 1) * metrics.vGap
+    /// 滚动位置：卡片坐标 ↔ 内容坐标换算用（拖拽手势在卡片空间）
+    private var _scrollOffset: State<CGFloat> = State(initialValue: 0)
+    private var scrollOffset: CGFloat {
+        get { _scrollOffset.wrappedValue }
+        nonmutating set { _scrollOffset.wrappedValue = newValue }
     }
 
-    /// 拖动中：光标所在格在本页内的偏移（卡片外为 nil）
+    /// 拖动中：光标所在格的内容扁平索引（卡片外为 nil）
     private var highlightOffset: Int? {
         guard dragItem != nil, let pt = dragPoint else { return nil }
         return localIndex(at: pt)
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            ZStack {
-                HStack(spacing: 0) {
-                    ForEach(0..<pageCount, id: \.self) { p in
-                        pageGrid(p)
-                            .frame(width: cardInnerWidth, height: pageHeight, alignment: .top)
+        ZStack {
+            ScrollView(.vertical, showsIndicators: true) {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.fixed(metrics.cellW), spacing: metrics.hGap), count: cols),
+                    spacing: metrics.vGap
+                ) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { off, item in
+                        let isDragged = dragItem?.id == item.id
+                        FolderItemCell(item: item, folderID: folderID, iconSize: iconPt,
+                                       onDragChanged: { pt in handleDrag(itemID: item.id, pt: pt) },
+                                       onDragEnded: { pt in handleDrop(item: item, pt: pt) })
+                            .opacity(isDragged ? 0.25 : 1)
+                            .scaleEffect(highlightOffset == off && !isDragged ? 1.08 : 1)
+                            .animation(.spring(response: 0.22, dampingFraction: 0.8), value: highlightOffset)
                     }
                 }
-                .offset(x: -CGFloat(page) * cardInnerWidth)
-                .animation(.spring(response: 0.3, dampingFraction: 0.85), value: page)
-                .contentShape(Rectangle())
-                .gesture(swipeGesture)
-
-                // 卡片内拖影
-                if let di = dragItem, let pt = dragPoint {
-                    ghost(for: di)
-                        .position(pt)
-                        .allowsHitTesting(false)
-                }
+                .frame(width: cardInnerWidth, alignment: .topLeading)
             }
-            .coordinateSpace(name: "folderCard")
-            .frame(width: cardInnerWidth, height: pageHeight, alignment: .top)
-            .clipped()
+            .frame(width: cardInnerWidth, height: visibleHeight)
+            .onScrollGeometryChange(for: CGFloat.self) { geo in
+                geo.contentOffset.y + geo.contentInsets.top
+            } action: { _, newValue in
+                scrollOffset = newValue
+            }
 
-            if pageCount > 1 {
-                HStack(spacing: 6) {
-                    ForEach(0..<pageCount, id: \.self) { i in
-                        Circle()
-                            .fill(i == page ? Color.primary.opacity(0.55) : Color.primary.opacity(0.18))
-                            .frame(width: 6, height: 6)
-                            .contentShape(Circle())
-                            .onTapGesture { withAnimation { store.folderPage = i } }
-                    }
-                }
+            // 卡片内拖影
+            if let di = dragItem, let pt = dragPoint {
+                ghost(for: di)
+                    .position(pt)
+                    .allowsHitTesting(false)
             }
         }
+        .coordinateSpace(name: "folderCard")
+        .frame(width: cardInnerWidth, height: visibleHeight)
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
     }
@@ -201,20 +200,20 @@ private struct FolderPagedGrid: View {
         defer { dragItem = nil; dragPoint = nil }
         guard let di = dragItem, di.id == item.id else { return }
         if let li = localIndex(at: pt) {
-            // 卡片内：放到光标格（绝对位置 = 页偏移 + 页内偏移）
-            store.moveWithinFolder(folderID: folderID, itemID: di.id,
-                                   toLocalIndex: page * perPage + li)
+            // 卡片内：放到光标格（越过末尾由 store 钳制到末尾）
+            store.moveWithinFolder(folderID: folderID, itemID: di.id, toLocalIndex: li)
         } else {
             // 拖出卡片：移出文件夹，回到桌面末尾
             store.removeFromFolder(itemID: di.id, folderID: folderID)
         }
     }
 
-    /// 光标 → 本页内格子偏移；在卡片外返回 nil
+    /// 光标 → 内容扁平格子索引；拖出卡片（可视区外）返回 nil。
+    /// 手势坐标在卡片空间，内容纵向坐标 = 卡片坐标 + 滚动偏移
     private func localIndex(at pt: CGPoint) -> Int? {
-        guard pt.x >= 0, pt.y >= 0, pt.x < cardInnerWidth, pt.y < pageHeight else { return nil }
+        guard pt.x >= 0, pt.y >= 0, pt.x < cardInnerWidth, pt.y < visibleHeight else { return nil }
         let col = min(cols - 1, max(0, Int(pt.x / (metrics.cellW + metrics.hGap))))
-        let row = min(rowsPerPage - 1, max(0, Int(pt.y / (metrics.cellH + metrics.vGap))))
+        let row = max(0, Int((pt.y + scrollOffset) / (metrics.cellH + metrics.vGap)))
         return row * cols + col
     }
 
@@ -236,40 +235,6 @@ private struct FolderPagedGrid: View {
         .padding(6)
         .background(RoundedRectangle(cornerRadius: 10).fill(.ultraThinMaterial))
         .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
-    }
-
-    // MARK: - 页面
-
-    /// 一页：3×3 与主网格同尺寸的格子，从左上角排起，最后一页留白
-    private func pageGrid(_ p: Int) -> some View {
-        let slice = Array(items.dropFirst(p * perPage).prefix(perPage))
-        return LazyVGrid(
-            columns: Array(repeating: GridItem(.fixed(metrics.cellW), spacing: metrics.hGap), count: cols),
-            spacing: metrics.vGap
-        ) {
-            ForEach(Array(slice.enumerated()), id: \.element.id) { off, item in
-                let isDragged = dragItem?.id == item.id
-                FolderItemCell(item: item, folderID: folderID, iconSize: iconPt,
-                               onDragChanged: { pt in handleDrag(itemID: item.id, pt: pt) },
-                               onDragEnded: { pt in handleDrop(item: item, pt: pt) })
-                    .opacity(isDragged ? 0.25 : 1)
-                    .scaleEffect(highlightOffset == off && !isDragged ? 1.08 : 1)
-                    .animation(.spring(response: 0.22, dampingFraction: 0.8), value: highlightOffset)
-            }
-        }
-        .frame(width: cardInnerWidth, height: pageHeight, alignment: .topLeading)
-    }
-
-    private var swipeGesture: some Gesture {
-        DragGesture(minimumDistance: 25)
-            .onEnded { v in
-                guard dragItem == nil else { return }   // 正在拖动图标时不翻页
-                if v.translation.width < -30, page < pageCount - 1 {
-                    withAnimation { store.folderPage = page + 1 }
-                } else if v.translation.width > 30, page > 0 {
-                    withAnimation { store.folderPage = page - 1 }
-                }
-            }
     }
 }
 

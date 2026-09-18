@@ -35,8 +35,6 @@ final class HomeStore: ObservableObject {
     // 文件夹展开覆盖层
     @Published var expandedFolderID: UUID?
     @Published var renamingFolderID: UUID?
-    /// 文件夹卡片的分页页码（iPhone 式 3×3，>9 个时分页）
-    @Published var folderPage = 0
     /// 展开来源：文件夹图标在面板坐标系中的矩形（iOS 式缩放动画的起点）
     @Published var folderSourceRect: CGRect = .zero
 
@@ -360,7 +358,6 @@ final class HomeStore: ObservableObject {
         folderSourceRect = sourceRect
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             expandedFolderID = id
-            folderPage = 0
         }
     }
 
