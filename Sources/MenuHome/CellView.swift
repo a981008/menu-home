@@ -6,6 +6,8 @@ struct CellView: View {
 
     let item: HomeItem
     let metrics: GridMetrics
+    /// 本格在页内的扁平索引（用于换算文件夹图标位置，动画起点）
+    var index: Int = 0
 
     @EnvironmentObject var store: HomeStore
     // 手工脱糖的 @State（本机 CLT 缺宏插件）
@@ -60,13 +62,22 @@ struct CellView: View {
 
     // MARK: - 点按
 
-    /// 编辑模式下点击无效（避免误触启动）
+    /// 点击
     private func tap() {
         if store.editMode { return }
         switch item {
         case .app(let a):    store.launch(a)
-        case .folder(let f): store.expandFolder(f.id)
+        case .folder(let f): store.expandFolder(f.id, sourceRect: iconRect)
         }
+    }
+
+    /// 文件夹图标盒子在面板坐标系中的矩形（iOS 式展开动画的起点）
+    private var iconRect: CGRect {
+        let row = index / metrics.columns
+        let col = index % metrics.columns
+        let o = metrics.cellOrigin(row: row, col: col)
+        let box = metrics.cellW - 30
+        return CGRect(x: o.x + (metrics.cellW - box) / 2, y: o.y, width: box, height: box)
     }
 
     // MARK: - 编辑模式拖拽
@@ -110,7 +121,7 @@ struct CellView: View {
             Button("整理桌面…") { store.editMode = true }
 
         case .folder(let f):
-            Button("打开") { store.expandFolder(f.id) }
+            Button("打开") { store.expandFolder(f.id, sourceRect: iconRect) }
             Button("重命名…") {
                 store.expandedFolderID = f.id
                 store.renamingFolderID = f.id

@@ -39,10 +39,9 @@ struct HomeView: View {
                 EditBar()
             }
 
-            // 文件夹展开覆盖层（另一模块实现）
+            // 文件夹展开覆盖层（另一模块实现；开合动画在卡片内部以图标为锚点）
             if let fid = store.expandedFolderID {
                 FolderOverlay(folderID: fid)
-                    .transition(.scale(scale: 0.9, anchor: .top).combined(with: .opacity))
             }
 
             // 搜索覆盖层（另一模块实现）
@@ -65,7 +64,6 @@ struct HomeView: View {
         // 面板坐标系：格子拖拽手势与拖影均以此为基准
         .coordinateSpace(name: "homePanel")
         .animation(.easeInOut(duration: 0.2), value: dim)
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: store.expandedFolderID)
         // Finder 拖入 .app 悬停高亮（面板描边）
         .overlay(
             RoundedRectangle(cornerRadius: Theme.panelRadius)

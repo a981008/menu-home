@@ -21,8 +21,8 @@ struct PageGrid: View {
                 .contextMenu { blankMenu }
 
             // 格子：按扁平索引换算行/列，用 .position 放到格子中心
-            ForEach(items) { item in
-                CellView(item: item, metrics: metrics)
+            ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
+                CellView(item: item, metrics: metrics, index: idx)
                     .position(position(of: item))
             }
         }

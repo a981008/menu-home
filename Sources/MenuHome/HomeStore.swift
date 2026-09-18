@@ -37,6 +37,8 @@ final class HomeStore: ObservableObject {
     @Published var renamingFolderID: UUID?
     /// 文件夹卡片的分页页码（iPhone 式 3×3，>9 个时分页）
     @Published var folderPage = 0
+    /// 展开来源：文件夹图标在面板坐标系中的矩形（iOS 式缩放动画的起点）
+    @Published var folderSourceRect: CGRect = .zero
 
     // 搜索覆盖层
     @Published var searchActive = false
@@ -369,15 +371,16 @@ final class HomeStore: ObservableObject {
 
     // MARK: - 文件夹展开
 
-    func expandFolder(_ id: UUID) {
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+    func expandFolder(_ id: UUID, sourceRect: CGRect = .zero) {
+        folderSourceRect = sourceRect
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             expandedFolderID = id
             folderPage = 0
         }
     }
 
     func collapseFolder() {
-        withAnimation(.easeIn(duration: 0.15)) {
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
             expandedFolderID = nil
             renamingFolderID = nil
         }
@@ -525,7 +528,13 @@ final class HomeStore: ObservableObject {
         let folder = FolderEntry(name: "新建文件夹", items: [.app(entry)])
         items[idx] = .folder(folder)
         setFlat(items)
-        expandFolder(folder.id)
+        // 卡片从原格子位置展开
+        let m = metrics
+        let row = idx / m.columns, col = idx % m.columns
+        let o = m.cellOrigin(row: row, col: col)
+        let box = m.cellW - 30
+        folderSourceRect = CGRect(x: o.x + (m.cellW - box) / 2, y: o.y, width: box, height: box)
+        expandFolder(folder.id, sourceRect: folderSourceRect)
         renamingFolderID = folder.id
     }
 

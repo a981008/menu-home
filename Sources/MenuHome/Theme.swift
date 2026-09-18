@@ -19,13 +19,14 @@ private struct LiquidGlassModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         let glass: Glass = interactive ? .regular.interactive() : .regular
-        content.glassEffect(glass, in: .rect(cornerRadius: cornerRadius))
+        // 连续曲率圆角（squircle，Apple HIG）：glassEffect 内部形状显式指定
+        content.glassEffect(glass, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
 
 extension View {
-    /// 液态玻璃圆角容器
-    func liquidGlass(cornerRadius: CGFloat, interactive: Bool = false) -> some View {
+    /// 液态玻璃圆角容器（默认 interactive：随指针产生液态高光反馈）
+    func liquidGlass(cornerRadius: CGFloat, interactive: Bool = true) -> some View {
         modifier(LiquidGlassModifier(cornerRadius: cornerRadius, interactive: interactive))
     }
 

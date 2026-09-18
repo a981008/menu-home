@@ -11,6 +11,21 @@ struct FolderOverlay: View {
         3 * store.metrics.cellW + 2 * store.metrics.hGap + 32
     }
 
+    /// iOS 同款开合动画：从文件夹图标位置缩放展开，收起时缩回图标
+    private var cardZoom: AnyTransition {
+        let m = store.metrics
+        let src = store.folderSourceRect
+        // 卡片最终位置（面板内居中，上移 12pt）
+        let cardH: CGFloat = 44 + 3 * m.cellH + 2 * m.vGap + 30   // 标题 + 3 行网格 + 页点/底距
+        let cardX = (m.pageW - cardWidth) / 2
+        let cardY = (m.panelH - cardH) / 2 - 12
+        guard src.width > 0, src.height > 0 else { return .opacity }
+        let ax = min(1, max(0, (src.midX - cardX) / cardWidth))
+        let ay = min(1, max(0, (src.midY - cardY) / cardH))
+        let s = max(0.12, min(0.5, src.width / cardWidth))
+        return .scale(scale: s, anchor: UnitPoint(x: ax, y: ay)).combined(with: .opacity)
+    }
+
     var body: some View {
         if let folder = store.folder(withID: folderID) {
             content(folder: folder)
@@ -26,6 +41,7 @@ struct FolderOverlay: View {
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture { store.collapseFolder() }
+                .transition(.opacity)
 
             VStack(spacing: 0) {
                 titleRow(folder: folder)
@@ -34,6 +50,7 @@ struct FolderOverlay: View {
             .frame(width: cardWidth)
             .liquidGlass(cornerRadius: Theme.cardRadius)
             .offset(y: -12)
+            .transition(cardZoom)
         }
     }
 
