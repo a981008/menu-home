@@ -51,7 +51,8 @@ struct CellView: View {
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.35)
                 .onEnded { _ in
-                    guard !store.editMode else { return }
+                    // 拖拽进行中不切编辑模式：中途的大动画事务会打断手势流（首次拖拽卡住的根因）
+                    guard !store.editMode, store.drag == nil else { return }
                     withAnimation { store.editMode = true }
                 }
         )

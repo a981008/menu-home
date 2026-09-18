@@ -28,6 +28,21 @@ struct GridCarousel: View {
             }
             .frame(width: metrics.pageW, height: contentHeight, alignment: .topLeading)
             .coordinateSpace(name: "homePanel")
+            // 兜底拖拽流：拖拽项提起后其格子视图被移除，格子上的手势流可能中断；
+            // 内容层手势宿主在拖拽全程存活，保证移动/松手事件不丢。双路同驱幂等，互不冲突
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 6, coordinateSpace: .named("homePanel"))
+                    .onChanged { v in
+                        if store.drag != nil {
+                            store.dragMoved(to: v.location, metrics: metrics)
+                        }
+                    }
+                    .onEnded { _ in
+                        if store.drag != nil {
+                            store.endDrag()
+                        }
+                    }
+            )
         }
         // App 式胶囊滚轴 + 滚动内容与滚轴都裁剪进面板圆角内（圆角外不露直角）
         .appScrollbar()

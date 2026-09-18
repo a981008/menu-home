@@ -33,7 +33,11 @@ private struct AppScrollbar: ViewModifier {
     }
 
     private let thumbWidth: CGFloat = 7
-    private let edgeInset: CGFloat = 3
+    /// 拇指与容器右缘的间距（不贴边）
+    private let edgeGap: CGFloat = 8
+    /// 轨道上下内收：容器圆角 28 在拇指所在 x 处深切约 8.4pt，
+    /// 内收 12pt 保证拇指全程位于圆角切割区之外（完整可见、绝不被裁）
+    private let trackInset: CGFloat = 12
     private let minThumbHeight: CGFloat = 30
 
     func body(content: Content) -> some View {
@@ -58,13 +62,13 @@ private struct AppScrollbar: ViewModifier {
             .overlay(alignment: .trailing) {
                 if visible {
                     GeometryReader { geo in
-                        let trackH = geo.size.height - edgeInset * 2
+                        let trackH = geo.size.height - trackInset * 2
                         let thumbH = max(minThumbHeight, trackH * thumbFraction)
                         Capsule()
                             .fill(Color.primary.opacity(0.32))
                             .frame(width: thumbWidth, height: thumbH)
-                            .position(x: geo.size.width - thumbWidth / 2 - edgeInset,
-                                      y: edgeInset + (trackH - thumbH) * progress + thumbH / 2)
+                            .position(x: geo.size.width - thumbWidth / 2 - edgeGap,
+                                      y: trackInset + (trackH - thumbH) * progress + thumbH / 2)
                     }
                     .allowsHitTesting(false)
                     .transition(.opacity)
