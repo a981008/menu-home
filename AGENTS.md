@@ -100,7 +100,7 @@ docs/ui-design.md                     UI 设计文档（v1.0）
 ## 5. 不变量与设计约定（改代码别破坏）
 
 1. **HomeStore 是唯一状态源**：跨视图状态一律 `@EnvironmentObject var store`；不要自建单例。
-2. **布局一律 metrics 驱动，禁止硬编码尺寸**：`GridMetrics`（cellW = 图标+30，cellH = 图标+32，hGap 12，vGap 14，hPad 20，topPad 16；图标 40/48/56 跟随 `IconSize` 设置；列数/行数 4/5/6 跟随 `settings.columns/rows`）。桌面是**单列表**（`store.pages == [items]`），超出可视行数由 GridCarousel 的 ScrollView 滚动 —— 别再引入分页。文件夹卡片、图标缩略图、拖影都已与主网格等比例 —— 调整尺寸只改 `GridMetrics.make` / `IconSize.iconPt`，别在视图里写死数字。
+2. **布局一律 metrics 驱动，禁止硬编码尺寸**：`GridMetrics`（cellW = 图标+30，cellH = 图标+32，hGap 12，vGap 14，hPad 20，topPad 16；图标 40/48/56 跟随 `IconSize` 设置；列数/行数 4/5/6 跟随 `settings.columns/rows`）。桌面是**单列表**（`store.pages == [items]`），超出可视行数由 GridCarousel 的 ScrollView 滚动 —— 别再引入分页。`index(at:)` **只钳列数、不钳行数**（单页滚动内容行数随条目增长，按设置行数钳制会让滚动区域的拖拽落点全部失效）——落点超出已有条目 = 追加到末尾。文件夹卡片、图标缩略图、拖影都已与主网格等比例 —— 调整尺寸只改 `GridMetrics.make` / `IconSize.iconPt`，别在视图里写死数字。
 3. **玻璃统一走 `Theme.liquidGlass`**：内部为 `glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius:, style: .continuous))`。圆角常量集中在 `Theme`（主要玻璃面统一 **28**：面板/文件夹卡片/搜索/添加浮层；胶囊 21 / 搜索栏 15 / 拖影 16 / 内滚区 10）。
 4. **拖拽是「提起」模型**（消除「图标来回移动」的关键，别改回 live-move）：
    - `beginDrag` 把图标从网格移出（其余立即补位）→ 只有拖影跟随光标

@@ -414,10 +414,16 @@ final class HomeStore: ObservableObject {
             lastGhostCommit = now
         }
         // 光标所在格：拖拽项已提起，占用者稳定不动（合并目标不再漂移）；
-        // 内容坐标系随滚动一致，滚到哪拖到哪
+        // 内容坐标系随滚动一致，滚到哪拖到哪。
+        // 落点超出已有条目（网格下方空白）= 追加到末尾
         if let idx = metrics.index(at: point) {
-            liveIndex = idx
-            updateMergeHold(targetID: idx < flatItems.count ? flatItems[idx].id : nil)
+            if idx < flatItems.count {
+                liveIndex = idx
+                updateMergeHold(targetID: flatItems[idx].id)
+            } else {
+                liveIndex = flatItems.count
+                cancelMergeHold()
+            }
         } else {
             cancelMergeHold()
         }

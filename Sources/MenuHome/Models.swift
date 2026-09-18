@@ -193,7 +193,9 @@ struct GridMetrics: Equatable {
         guard x >= 0, y >= 0 else { return nil }
         let col = Int(x / (cellW + hGap))
         let row = Int(y / (cellH + vGap))
-        guard col < columns, row < rows else { return nil }
+        // 只钳列数：单页滚动后内容行数随条目增长（可超出设置的可见行数），
+        // 行越界交给调用方处理（落点在网格下方空白 = 追加到末尾）
+        guard col < columns else { return nil }
         return (row, col)
     }
 
