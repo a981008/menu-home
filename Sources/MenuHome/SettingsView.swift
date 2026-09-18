@@ -197,7 +197,7 @@ struct SettingsView: View {
     private var aboutGroup: some View {
         GroupBox(label: Text("关于")) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("MenuHome 1.0.0 (1)")
+                Text("MenuHome \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1")")
                     .font(.system(size: 12, weight: .medium))
                 Text("状态栏上的个人桌面 · 布局保存在 ~/Library/Application Support/MenuHome/layout.json")
                     .font(.system(size: 10))
