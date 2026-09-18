@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 /// 扫描本机安装的 App
 /// - 根目录：/Applications、~/Applications、/System/Applications、
@@ -18,6 +19,22 @@ enum AppScanner {
 
     /// 最大递归层数：0 = 根目录本身，2 = 允许两层子目录
     private static let maxDepth = 2
+
+    // MARK: - 图标缓存
+
+    private static let iconCache: NSCache<NSString, NSImage> = {
+        let c = NSCache<NSString, NSImage>()
+        c.countLimit = 400
+        return c
+    }()
+
+    /// 带缓存的图标读取：拖拽/悬停等重渲染热路径不再反复走 NSWorkspace 查询
+    static func cachedIcon(forPath path: String) -> NSImage {
+        if let hit = iconCache.object(forKey: path as NSString) { return hit }
+        let img = NSWorkspace.shared.icon(forFile: path)
+        iconCache.setObject(img, forKey: path as NSString)
+        return img
+    }
 
     /// 从路径构造 AppEntry（Finder 拖入 .app 用）；非 .app 或无 bundle id 返回 nil
     static func entry(atPath path: String) -> AppEntry? {

@@ -27,7 +27,7 @@ struct AppCellView: View {
     // MARK: - 图标区
 
     private var iconArea: some View {
-        Image(nsImage: NSWorkspace.shared.icon(forFile: app.path))
+        Image(nsImage: AppScanner.cachedIcon(forPath: app.path))
             .resizable()
             .frame(width: iconPt, height: iconPt)
             .overlay(alignment: .bottomTrailing) { runningDot }

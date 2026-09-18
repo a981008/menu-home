@@ -50,7 +50,7 @@ struct FolderCellView: View {
                     spacing: thumbGap
                 ) {
                     ForEach(folder.items.compactMap { $0.appEntry }.prefix(9)) { mini in
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: mini.path))
+                        Image(nsImage: AppScanner.cachedIcon(forPath: mini.path))
                             .resizable()
                             .frame(width: thumbSize, height: thumbSize)
                     }

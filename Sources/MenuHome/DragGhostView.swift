@@ -5,8 +5,8 @@ import AppKit
 struct DragGhostView: View {
 
     let item: HomeItem
-    /// 拖拽点（homePanel 坐标系）
-    let point: CGPoint
+    /// 拖拽点跟踪器（独立于 HomeStore：鼠标移动只重渲染拖影本身）
+    @ObservedObject var tracker: GhostTracker
     /// 是否悬停在合并候选上（描边提示）
     var merging: Bool = false
 
@@ -32,7 +32,7 @@ struct DragGhostView: View {
         )
         .scaleEffect(1.1)
         .shadow(color: .black.opacity(0.25), radius: 12)
-        .position(point)
+        .position(tracker.point)
     }
 
     // MARK: - 拖影图标
@@ -42,7 +42,7 @@ struct DragGhostView: View {
         switch item {
         case .app(let a):
             // App：真实系统图标
-            Image(nsImage: NSWorkspace.shared.icon(forFile: a.path))
+            Image(nsImage: AppScanner.cachedIcon(forPath: a.path))
                 .resizable()
                 .frame(width: iconPt, height: iconPt)
         case .folder(let f):
@@ -51,7 +51,7 @@ struct DragGhostView: View {
                 RoundedRectangle(cornerRadius: iconPt * 0.22)
                     .fill(Color.primary.opacity(0.06))
                 if let first = f.items.compactMap({ $0.appEntry }).first {
-                    Image(nsImage: NSWorkspace.shared.icon(forFile: first.path))
+                    Image(nsImage: AppScanner.cachedIcon(forPath: first.path))
                         .resizable()
                         .frame(width: iconPt * 0.5, height: iconPt * 0.5)
                 } else {

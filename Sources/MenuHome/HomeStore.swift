@@ -56,8 +56,12 @@ final class HomeStore: ObservableObject {
     @Published var runningBundleIDs: Set<String> = []
     @Published var missingBundleIDs: Set<String> = []
 
-    // 桌面拖拽会话（编辑模式）
+    // 桌面拖拽会话（提起模型：只存结构性状态；高频光标位置在 ghost tracker）
     @Published var drag: DragSession?
+    /// 拖影位置跟踪（独立 ObservableObject：鼠标移动只重渲染拖影，不触发整树重渲染）
+    let ghost = GhostTracker()
+    /// 拖动中的实时插入索引（非发布态；endDrag 用，避免逐事件发布）
+    private var liveIndex = 0
 
     // 减弱动态效果
     @Published var reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
@@ -84,18 +88,35 @@ final class HomeStore: ObservableObject {
     }
 
     private var persistWork: DispatchWorkItem?
+    /// 拖拽期间被推迟的落盘请求
+    private var persistPending = false
 
     private func schedulePersist() {
         persistWork?.cancel()
+        // 拖拽期间不落盘：结束（放置/取消）后统一补写，避免拖动中途主线程 I/O
+        guard drag == nil else {
+            persistPending = true
+            return
+        }
         let wi = DispatchWorkItem { [weak self] in self?.persistNow() }
         persistWork = wi
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: wi)
     }
 
+    /// 拖拽结束后补写被推迟的持久化
+    private func flushPendingPersist() {
+        guard persistPending else { return }
+        persistPending = false
+        schedulePersist()
+    }
+
     private func persistNow() {
         let file = LayoutFile(version: 1, pages: pages, settings: settings)
-        if let data = try? JSONEncoder().encode(file) {
-            try? data.write(to: fileURL, options: .atomic)
+        guard let data = try? JSONEncoder().encode(file) else { return }
+        let url = fileURL
+        // 写盘放后台队列：杜绝交互过程中的主线程 I/O 卡顿
+        DispatchQueue.global(qos: .utility).async {
+            try? data.write(to: url, options: .atomic)
         }
     }
 
@@ -413,13 +434,17 @@ final class HomeStore: ObservableObject {
         var items = flatItems
         items.remove(at: idx)
         setFlat(items)
+        liveIndex = idx
         drag = DragSession(item: item, originIndex: idx, currentIndex: idx)
     }
 
-    /// 拖拽移动中（point 为 homePanel 坐标系）
+    /// 拖拽移动中（point 为 homePanel 坐标系）。
+    /// 高频热路径：只写 ghost tracker 与非发布态；@Published 仅在结构变化（跨格/合并态）时更新，
+    /// 否则每个鼠标事件都会触发整棵视图树重渲染（卡顿根因）。
     func dragMoved(to point: CGPoint, metrics: GridMetrics) {
-        guard var d = drag else { return }
-        d.point = point
+        guard drag != nil else { return }
+        ghost.point = point
+        ghost.started = true
         // 边缘悬停自动翻页
         flipWork?.cancel()
         flipWork = nil
@@ -429,13 +454,10 @@ final class HomeStore: ObservableObject {
             scheduleFlip(delta: 1)
         }
         // 光标所在格：拖拽项已提起，占用者稳定不动（合并目标不再漂移）
-        if let idx = metrics.flatIndex(at: point, page: page), idx < flatItems.count {
-            d.currentIndex = idx
-            drag = d
-            updateMergeHold(targetID: flatItems[idx].id)
+        if let idx = metrics.flatIndex(at: point, page: page) {
+            liveIndex = idx
+            updateMergeHold(targetID: idx < flatItems.count ? flatItems[idx].id : nil)
         } else {
-            d.currentIndex = min(max(d.currentIndex, 0), flatItems.count)
-            drag = d
             cancelMergeHold()
         }
     }
@@ -446,17 +468,20 @@ final class HomeStore: ObservableObject {
         holdWork?.cancel()
         holdWork = nil
         holdTargetID = nil
+        ghost.started = false
         guard let d = drag else { return }
         drag = nil
         if let mc = d.mergeCandidateID, mc != d.itemID, let target = item(withID: mc) {
             performMerge(dragged: d.item, target: target)
+            flushPendingPersist()
             return
         }
         // 放置：插入到光标所在格（该格图标向后让位）
         var items = flatItems
-        let idx = max(0, min(d.currentIndex, items.count))
+        let idx = max(0, min(liveIndex, items.count))
         items.insert(d.item, at: idx)
         setFlat(items)
+        flushPendingPersist()
     }
 
     /// 拖拽取消（松手在无效区域）：放回原位
@@ -466,11 +491,13 @@ final class HomeStore: ObservableObject {
         holdWork?.cancel()
         holdWork = nil
         holdTargetID = nil
+        ghost.started = false
         guard let d = drag else { return }
         drag = nil
         var items = flatItems
         items.insert(d.item, at: max(0, min(d.originIndex, items.count)))
         setFlat(items)
+        flushPendingPersist()
     }
 
     private func scheduleFlip(delta: Int) {
@@ -564,4 +591,14 @@ final class HomeStore: ObservableObject {
         }
         setFlat(items)
     }
+}
+
+/// 拖影位置跟踪：独立轻量 ObservableObject。
+/// 鼠标移动（可达数百 Hz）只重渲染拖影本身；若挂在 HomeStore 的 @Published 上，
+/// 每个事件都会让整棵视图树重评估 —— 这是拖拽卡顿的根因，别把 point 搬回去。
+@MainActor
+final class GhostTracker: ObservableObject {
+    @Published var point: CGPoint = .zero
+    /// 是否已收到首个移动事件（拖起瞬间避免拖影闪现在原点）
+    @Published var started = false
 }

@@ -116,7 +116,7 @@ private struct AddAppRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: entry.path))
+            Image(nsImage: AppScanner.cachedIcon(forPath: entry.path))
                 .resizable()
                 .frame(width: 32, height: 32)
             VStack(alignment: .leading, spacing: 2) {

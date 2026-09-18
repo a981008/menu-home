@@ -221,7 +221,7 @@ private struct FolderPagedGrid: View {
     private func ghost(for item: HomeItem) -> some View {
         VStack(spacing: 2) {
             if let e = item.appEntry {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: e.path))
+                Image(nsImage: AppScanner.cachedIcon(forPath: e.path))
                     .resizable()
                     .frame(width: iconPt, height: iconPt)
             } else {
@@ -340,7 +340,7 @@ private struct FolderItemCell: View {
     private func appCell(_ entry: AppEntry) -> some View {
         VStack(spacing: 4) {
             ZStack(alignment: .topLeading) {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: entry.path))
+                Image(nsImage: AppScanner.cachedIcon(forPath: entry.path))
                     .resizable()
                     .frame(width: iconSize, height: iconSize)
 

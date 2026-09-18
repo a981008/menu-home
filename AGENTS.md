@@ -104,10 +104,11 @@ docs/ui-design.md                     UI 设计文档（v1.0）
    - `dragMoved` 只更新 currentIndex + 合并候选（占用者稳定不动）
    - `endDrag` 插入光标格或合并；`cancelDrag` 回原位；合并 = 悬停占用者 400ms（`holdWork` 计时）
    - 合并时拖拽项**不在** items 里 → `performMerge(dragged:target:)` 直接在目标位置生成
+   - **性能红线**：光标高频移动只写 `store.ghost`（独立 GhostTracker，只重渲染拖影）与非发布态 `liveIndex`；`@Published` 仅在跨格/合并态等结构变化时更新。鼠标移动事件可达数百 Hz，逐事件发布会让整棵视图树重渲染（卡顿根因）。图标读取一律用 `AppScanner.cachedIcon(forPath:)`（NSCache），别直接调 `NSWorkspace.icon(forFile:)`
 5. **拖拽坐标系**：桌面拖拽用 `.named("homePanel")`；文件夹卡片内拖拽用 `.named("folderCard")`。
 6. **面板开合动画**：`store.panelVisible` + `store.panelAnchor`（状态栏图标在面板上的相对锚点）驱动 scale/opacity；窗口先出现、下一帧置 visible。收起 = 先收缩、0.3s 后 `orderOut` + `resetTransientState()`（`closeWork` 延迟任务；收起途中再点图标会反向弹回）。
 7. **文件夹开合**：`folderSourceRect`（点击时记录的图标矩形）作为动画锚点，卡片 transition 以它缩放展开/缩回；卡片分页用 `store.folderPage`（展开时归零）。
-8. **持久化**：`~/Library/Application Support/MenuHome/layout.json`（pages + settings，文件夹有稳定 UUID）。**做会改动布局的自动化测试前先备份该文件，测完还原**。
+8. **持久化**：`~/Library/Application Support/MenuHome/layout.json`（pages + settings，文件夹有稳定 UUID）。拖拽期间落盘会被推迟（`persistPending`），拖拽结束统一补写；写盘在后台队列执行（`persistNow`），别把文件 I/O 挪回主线程。**做会改动布局的自动化测试前先备份该文件，测完还原**。
 9. **UI 文案全部简体中文**，代码注释也用中文。
 10. 新增 `@Published` 瞬态时，确认是否要在 `resetTransientState()` 里复位（面板收起后不留脏状态）。
 

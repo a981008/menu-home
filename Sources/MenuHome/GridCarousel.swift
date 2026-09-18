@@ -24,9 +24,9 @@ struct GridCarousel: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.92), value: store.page)
             }
 
-            // 拖影跟随（编辑模式拖拽中；不拦截事件）
-            if let d = store.drag {
-                DragGhostView(item: d.item, point: d.point, merging: d.mergeCandidateID != nil)
+            // 拖影跟随（拖拽中；不拦截事件）。位置来自独立 tracker：移动只重渲染拖影
+            if let d = store.drag, store.ghost.started {
+                DragGhostView(item: d.item, tracker: store.ghost, merging: d.mergeCandidateID != nil)
                     .allowsHitTesting(false)
             }
         }

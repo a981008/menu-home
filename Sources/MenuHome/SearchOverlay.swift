@@ -153,7 +153,7 @@ private struct SearchResultCell: View {
     private var icon: some View {
         switch item {
         case .app(let entry):
-            Image(nsImage: NSWorkspace.shared.icon(forFile: entry.path))
+            Image(nsImage: AppScanner.cachedIcon(forPath: entry.path))
                 .resizable()
         case .folder(let folder):
             RoundedRectangle(cornerRadius: 9)
