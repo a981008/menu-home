@@ -30,8 +30,9 @@ fi
 
 echo "==> [2/3] 组装 $APP"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/MenuHome"
+cp Assets/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -46,6 +47,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 	<string>com.menuhome.app</string>
 	<key>CFBundleExecutable</key>
 	<string>MenuHome</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

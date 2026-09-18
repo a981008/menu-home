@@ -92,8 +92,10 @@ Sources/MenuHome/
 ├── RunningMonitor                    NSWorkspace 运行中监听（圆点）
 ├── SettingsView / SettingsWindowController
 └── Theme                             圆角体系 + liquidGlass 修饰符（唯一玻璃入口）
-scripts/build_app.sh                  唯一构建入口（release/debug）
+scripts/build_app.sh                  唯一构建入口（release/debug；组装时复制 Assets/AppIcon.icns）
 scripts/make_dmg.sh                   DMG 分发包（App + Applications 快捷方式，UDZO 压缩 + 校验）
+scripts/make_icon.sh                  应用图标生成（make_icon.swift 程序化绘制 → iconset → iconutil 合成 icns）
+Assets/AppIcon.icns                   应用图标（.icns 已入库；改设计后重跑 make_icon.sh 再生成）
 docs/ui-design.md                     UI 设计文档（v1.0）
 ```
 
