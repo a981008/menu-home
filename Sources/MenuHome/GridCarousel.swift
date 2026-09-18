@@ -15,7 +15,7 @@ struct GridCarousel: View {
     }
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: true) {
+        ScrollView(.vertical, showsIndicators: false) {
             ZStack(alignment: .topLeading) {
                 PageGrid(metrics: metrics)
                     .frame(width: metrics.pageW, height: contentHeight, alignment: .topLeading)
@@ -29,7 +29,8 @@ struct GridCarousel: View {
             .frame(width: metrics.pageW, height: contentHeight, alignment: .topLeading)
             .coordinateSpace(name: "homePanel")
         }
-        // 滚动内容与滚轴都裁剪进面板圆角内（App 式滚轴，圆角外不露直角）
+        // App 式胶囊滚轴 + 滚动内容与滚轴都裁剪进面板圆角内（圆角外不露直角）
+        .appScrollbar()
         .clipShape(RoundedRectangle(cornerRadius: Theme.panelRadius, style: .continuous))
     }
 }

@@ -86,6 +86,7 @@ Sources/MenuHome/
 ├── FolderOverlay                     文件夹卡片（面板内居中）：3 列滚动网格 + 卡片内拖拽 + 行内重命名
 ├── SearchOverlay / AddAppOverlay     搜索 / 添加 App 覆盖层（同构：图标+居中输入框+取消 / Divider / 行列表；搜索只列本机 App，空查询=全量，不含文件夹）
 ├── EditBar / EmptyStateView / DragGhostView / JiggleModifier
+├── AppScrollbar                      App 式胶囊滚轴（自定义：滚动时出现、停顿淡出；隐藏系统指示器）
 ├── AppScanner                        递归扫 4 目录（两层）+ 系统 App 本地化名（loctable/strings）
 ├── RunningMonitor                    NSWorkspace 运行中监听（圆点）
 ├── SettingsView / SettingsWindowController
@@ -98,7 +99,7 @@ docs/ui-design.md                     UI 设计文档（v1.0）
 
 1. **HomeStore 是唯一状态源**：跨视图状态一律 `@EnvironmentObject var store`；不要自建单例。
 2. **布局一律 metrics 驱动，禁止硬编码尺寸**：`GridMetrics`（cellW = 图标+30，cellH = 图标+32，hGap 12，vGap 14，hPad 20，topPad 16；图标 40/48/56 跟随 `IconSize` 设置；列数/行数 4/5/6 跟随 `settings.columns/rows`）。桌面是**单列表**（`store.pages == [items]`），超出可视行数由 GridCarousel 的 ScrollView 滚动 —— 别再引入分页。文件夹卡片、图标缩略图、拖影都已与主网格等比例 —— 调整尺寸只改 `GridMetrics.make` / `IconSize.iconPt`，别在视图里写死数字。
-3. **玻璃统一走 `Theme.liquidGlass`**：内部为 `glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius:, style: .continuous))`。圆角常量集中在 `Theme`（面板 28 / 卡片 26 / 浮层 24 / 胶囊 21 / 搜索栏 15 / 拖影 16）。
+3. **玻璃统一走 `Theme.liquidGlass`**：内部为 `glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius:, style: .continuous))`。圆角常量集中在 `Theme`（主要玻璃面统一 **28**：面板/文件夹卡片/搜索/添加浮层；胶囊 21 / 搜索栏 15 / 拖影 16 / 内滚区 10）。
 4. **拖拽是「提起」模型**（消除「图标来回移动」的关键，别改回 live-move）：
    - `beginDrag` 把图标从网格移出（其余立即补位）→ 只有拖影跟随光标
    - `dragMoved` 只更新 currentIndex + 合并候选（占用者稳定不动）
@@ -117,7 +118,7 @@ docs/ui-design.md                     UI 设计文档（v1.0）
 - `NSDictionary` 遍历 key 是 Any：用 `for case let (key as String, sub as [String: Any]) in table`
 - 系统 App 本地化名：先按候选语言读 `InfoPlist.loctable`/`.strings`；`Bundle.localizedInfoDictionary` 只作兜底（它对无中文 strings 的系统 App 会回退英文）；loctable 查路径**不能**带 `forLocalization:`
 - 文件夹卡片内拖拽坐标在卡片空间（"folderCard"），格子换算需加滚动偏移 `scrollOffset`（onScrollGeometryChange 跟踪）
-- 玻璃容器（面板/卡片/浮层）内的 ScrollView 必须 `.clipShape` 对齐容器圆角（`Theme.scrollClipRadius` 或容器自身圆角），否则滚动内容/滚轴溢出圆角出现直角外露；本 SDK 无 `scrollIndicatorInsets`
+- 玻璃容器（面板/卡片/浮层）内的 ScrollView 必须 `.clipShape` 对齐容器圆角（`Theme.scrollClipRadius` 或容器圆角），否则滚动内容/滚轴溢出圆角出现直角外露；滚轴一律 `.appScrollbar()`（自定义胶囊），系统指示器观感不像 App 且本 SDK 无 `scrollIndicatorInsets`
 - `glassEffect` 形状必须用显式 `RoundedRectangle(cornerRadius:style: .continuous)`（`.rect(cornerRadius:)` 在玻璃合成下圆角可能不完整）
 - `NSEvent.momentumPhase` 是 OptionSet：判空用 `!event.momentumPhase.isEmpty`（没有 `.zero`）
 - 终端无屏幕录制权限（TCC），`screencapture` 截不了屏 —— 验证视觉改动靠构建 + 用户确认

@@ -1,57 +1,44 @@
 import AppKit
 
-/// 状态栏图标：迷你 App 图标 —— 彩色渐变圆角底 + 玻璃高光 + 白色房子，
-/// 让状态栏入口看起来就像点开一个 App 的菜单（非模板图，保留彩色）
+/// 状态栏图标：透明底的「App 图标」—— 圆角矩形轮廓内一枚房子，
+/// 模板图渲染（黑 + alpha），自动适配菜单栏深浅色与高亮态
 enum StatusIcon {
 
     static func appIcon() -> NSImage {
         let size = NSSize(width: 18, height: 18)
         let img = NSImage(size: size, flipped: false) { _ in
-            let bounds = NSRect(origin: .zero, size: size)
-            let squircle = NSBezierPath(roundedRect: bounds, xRadius: 4.5, yRadius: 4.5)
+            let black = NSColor.black
 
-            // 1. 底色渐变：系统蓝（上）→ 靛蓝（下）
-            NSGradient(colors: [.systemBlue, .systemIndigo])?
-                .draw(in: squircle, angle: -90)
-
-            // 2. 玻璃高光：顶部一层上亮下无的白色渐变（裁剪进圆角内）
-            NSGraphicsContext.saveGraphicsState()
-            squircle.addClip()
-            NSGradient(colors: [NSColor.white.withAlphaComponent(0.06),
-                                NSColor.white.withAlphaComponent(0.32)])?
-                .draw(in: NSRect(x: 0, y: 9, width: 18, height: 9), angle: 90)
-            NSGraphicsContext.restoreGraphicsState()
-
-            // 3. 细描边：浅色菜单栏上提供轮廓感
-            squircle.lineWidth = 0.5
-            NSColor.black.withAlphaComponent(0.15).setStroke()
+            // App 图标轮廓：圆角矩形描边（底色透明）
+            let squircle = NSBezierPath(roundedRect: NSRect(x: 0.75, y: 0.75, width: 16.5, height: 16.5),
+                                        xRadius: 4.5, yRadius: 4.5)
+            squircle.lineWidth = 1.4
+            black.setStroke()
             squircle.stroke()
 
-            // 4. 白色房子：屋顶三角 + 墙体（白色描边同色加圆角感）+ 靛蓝门
-            let white = NSColor.white
+            // 房子：屋顶（描边加重量）+ 墙体（门用 even-odd 挖空，门底与墙底齐平）
             let roof = NSBezierPath()
-            roof.move(to: NSPoint(x: 3.3, y: 9.6))
-            roof.line(to: NSPoint(x: 9, y: 14.4))
-            roof.line(to: NSPoint(x: 14.7, y: 9.6))
+            roof.move(to: NSPoint(x: 5.6, y: 9.4))
+            roof.line(to: NSPoint(x: 9, y: 12.2))
+            roof.line(to: NSPoint(x: 12.4, y: 9.4))
             roof.close()
-            white.setFill()
-            roof.fill()
-            roof.lineWidth = 1
+            roof.lineWidth = 0.8
             roof.lineJoinStyle = .round
-            white.setStroke()
+            black.setFill()
+            roof.fill()
+            black.setStroke()
             roof.stroke()
 
-            let body = NSBezierPath(rect: NSRect(x: 4.7, y: 3.8, width: 8.6, height: 6.6))
-            white.setFill()
-            body.fill()
-
-            let door = NSBezierPath(rect: NSRect(x: 7.85, y: 3.8, width: 2.3, height: 3.6))
-            NSColor.systemIndigo.setFill()
-            door.fill()
+            let bodyDoor = NSBezierPath()
+            bodyDoor.append(NSBezierPath(rect: NSRect(x: 6.4, y: 5.9, width: 5.2, height: 3.9)))
+            bodyDoor.append(NSBezierPath(rect: NSRect(x: 8.3, y: 5.9, width: 1.4, height: 1.6)))
+            bodyDoor.windingRule = .evenOdd
+            black.setFill()
+            bodyDoor.fill()
 
             return true
         }
-        img.isTemplate = false
+        img.isTemplate = true
         img.accessibilityDescription = "MenuHome"
         return img
     }

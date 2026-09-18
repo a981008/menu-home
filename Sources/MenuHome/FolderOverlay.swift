@@ -48,7 +48,7 @@ struct FolderOverlay: View {
                 itemArea(folder: folder)
             }
             .frame(width: cardWidth)
-            .liquidGlass(cornerRadius: Theme.cardRadius)
+            .liquidGlass(cornerRadius: Theme.panelRadius)
             .transition(cardZoom)
         }
     }
@@ -150,7 +150,7 @@ private struct FolderScrollGrid: View {
 
     var body: some View {
         ZStack {
-            ScrollView(.vertical, showsIndicators: true) {
+            ScrollView(.vertical, showsIndicators: false) {
                 LazyVGrid(
                     columns: Array(repeating: GridItem(.fixed(metrics.cellW), spacing: metrics.hGap), count: cols),
                     spacing: metrics.vGap
@@ -168,7 +168,8 @@ private struct FolderScrollGrid: View {
                 .frame(width: cardInnerWidth, alignment: .topLeading)
             }
             .frame(width: cardInnerWidth, height: visibleHeight)
-            // 滚动内容与滚轴裁剪进圆角容器（App 式滚轴，圆角外不露直角）
+            // App 式胶囊滚轴 + 滚动内容与滚轴裁剪进圆角容器（圆角外不露直角）
+            .appScrollbar()
             .clipShape(RoundedRectangle(cornerRadius: Theme.scrollClipRadius, style: .continuous))
             .onScrollGeometryChange(for: CGFloat.self) { geo in
                 geo.contentOffset.y + geo.contentInsets.top

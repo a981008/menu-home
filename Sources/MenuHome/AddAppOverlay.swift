@@ -38,7 +38,7 @@ struct AddAppOverlay: View {
                 }
                 list
             }
-            .liquidGlass(cornerRadius: Theme.overlayRadius)
+            .liquidGlass(cornerRadius: Theme.panelRadius)
             .padding(1)
         }
     }
@@ -69,7 +69,7 @@ struct AddAppOverlay: View {
     // MARK: - 列表
 
     private var list: some View {
-        ScrollView(.vertical) {
+        ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(spacing: 0) {
                 ForEach(filtered) { entry in
                     AddAppRow(entry: entry, target: target)
@@ -82,8 +82,9 @@ struct AddAppOverlay: View {
                 }
             }
         }
-        // 滚动内容与滚轴裁剪进浮层圆角内（与面板圆角对齐，圆角外不露直角）
-        .clipShape(RoundedRectangle(cornerRadius: Theme.overlayRadius, style: .continuous))
+        // App 式胶囊滚轴 + 滚动内容与滚轴裁剪进浮层圆角内（与面板圆角对齐）
+        .appScrollbar()
+        .clipShape(RoundedRectangle(cornerRadius: Theme.panelRadius, style: .continuous))
         .task {
             // 打开覆盖层时取本机 App 列表（带缓存，首次扫描后不重扫）
             if apps.isEmpty {

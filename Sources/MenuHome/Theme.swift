@@ -1,12 +1,11 @@
 import SwiftUI
 
 /// macOS 27（Tahoe）液态玻璃设计语言（部署目标 macOS 26+，glassEffect 原生可用）
-/// - 大的连续圆角：面板 28 / 卡片 26 / 浮层 24 / 胶囊 21 / 搜索栏 15 / 拖影 16 / 内滚区 10
+/// - 大的连续圆角：主要玻璃面统一 28（面板 / 文件夹卡片 / 搜索 / 添加浮层）；
+///   胶囊 21 / 搜索栏 15 / 拖影 16 / 内滚区 10
 /// - 液态玻璃材质：折射 + 高光，由系统实时渲染
 enum Theme {
-    static let panelRadius: CGFloat = 28    // 主面板
-    static let cardRadius: CGFloat = 26     // 文件夹展开卡片
-    static let overlayRadius: CGFloat = 24  // 添加 App / 搜索浮层（两者同构，共用圆角）
+    static let panelRadius: CGFloat = 28    // 主要玻璃面统一圆角（面板 / 卡片 / 浮层）
     static let pillRadius: CGFloat = 21     // 编辑条胶囊（高度 42 的一半）
     static let searchBarRadius: CGFloat = 15 // 常驻搜索栏胶囊（高度 30 的一半）
     static let ghostRadius: CGFloat = 16    // 拖影
