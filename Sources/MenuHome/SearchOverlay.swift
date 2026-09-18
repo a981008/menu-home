@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 
 /// 搜索覆盖层（由顶部常驻搜索栏 / 键盘直入 / ⌘F 呼出）。
-/// 与「添加 App」覆盖层**完全同构**：顶栏（图标+标题+输入框+取消）/ 分隔线 / 行列表；
-/// 空查询 = 全量列表（桌面文件夹在前 + 全部本机 App），点 App 启动、点文件夹展开。
+/// 与「添加 App」覆盖层**完全同构**：顶栏（图标 + 居中输入框 + 取消）/ 分隔线 / 行列表；
+/// 只列本机 App（不含 MenuHome 文件夹），空查询 = 全量，点行即启动。
 struct SearchOverlay: View {
     @EnvironmentObject var store: HomeStore
 
@@ -20,16 +20,11 @@ struct SearchOverlay: View {
     }
     @FocusState private var focused: Bool
 
-    /// 结果 = 桌面文件夹（在前）+ 全部本机 App；按名称过滤（空查询 = 全量）
-    private var results: [HomeItem] {
-        let folders = store.flatItems.filter {
-            if case .folder = $0 { return true }
-            return false
-        }
-        let all = folders + apps.map { HomeItem.app($0) }
+    /// 结果 = 全部本机 App；按名称过滤（空查询 = 全量）。不含 MenuHome 文件夹
+    private var results: [AppEntry] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty else { return all }
-        return all.filter { $0.displayName.localizedCaseInsensitiveContains(q) }
+        guard !q.isEmpty else { return apps }
+        return apps.filter { $0.name.localizedCaseInsensitiveContains(q) }
     }
 
     var body: some View {
@@ -45,27 +40,27 @@ struct SearchOverlay: View {
         }
     }
 
-    // MARK: 顶栏（与「添加 App」一致的结构与间距）
+    // MARK: 顶栏（与「添加 App」一致：图标 + 居中输入框 + 取消，无标题文字）
 
     private var topBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            Text("搜索")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-            Spacer()
+        ZStack {
+            // 输入框在顶栏正中
             TextField("搜索 App…", text: _query.projectedValue)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 12))
-                .frame(maxWidth: 200)
+                .frame(width: 200)
                 .focused($focused)
                 .onSubmit { activateFirst() }
-            Button("取消") {
-                store.closeSearch()
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("取消") {
+                    store.closeSearch()
+                }
+                .glassButton()
+                .controlSize(.small)
             }
-            .glassButton()
-            .controlSize(.small)
         }
         .padding(12)
         .onAppear {
@@ -79,8 +74,8 @@ struct SearchOverlay: View {
     private var list: some View {
         ScrollView(.vertical) {
             LazyVStack(spacing: 0) {
-                ForEach(results) { item in
-                    SearchRow(item: item)
+                ForEach(results) { entry in
+                    SearchRow(entry: entry)
                 }
                 if results.isEmpty {
                     Text(apps.isEmpty ? "正在扫描本机 App…" : "没有匹配「\(query)」的 App")
@@ -111,25 +106,15 @@ struct SearchOverlay: View {
 
     private func activateFirst() {
         guard let first = results.first else { return }
-        activate(first)
-    }
-
-    private func activate(_ item: HomeItem) {
-        switch item {
-        case .app(let entry):
-            store.closeSearch()
-            store.launch(entry)
-        case .folder(let folder):
-            store.closeSearch()
-            store.expandFolder(folder.id)
-        }
+        store.closeSearch()
+        store.launch(first)
     }
 }
 
 // MARK: - 结果行（与「添加 App」行样式一致：图标 32 + 名称/副行，悬停高亮）
 
 private struct SearchRow: View {
-    let item: HomeItem
+    let entry: AppEntry
     @EnvironmentObject var store: HomeStore
     private var _hovering: State<Bool> = State(initialValue: false)
     private var hovering: Bool {
@@ -139,14 +124,15 @@ private struct SearchRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            icon
+            Image(nsImage: AppScanner.cachedIcon(forPath: entry.path))
+                .resizable()
                 .frame(width: 32, height: 32)
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.displayName)
+                Text(entry.name)
                     .font(.system(size: 13))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                Text(subtitle)
+                Text((entry.path as NSString).deletingLastPathComponent)
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -158,40 +144,9 @@ private struct SearchRow: View {
         .background(Color.primary.opacity(hovering ? 0.06 : 0))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        .onTapGesture { activate() }
-    }
-
-    private var subtitle: String {
-        switch item {
-        case .app(let entry):
-            return (entry.path as NSString).deletingLastPathComponent
-        case .folder(let folder):
-            return "文件夹 · \(folder.items.count) 个 App"
-        }
-    }
-
-    @ViewBuilder
-    private var icon: some View {
-        switch item {
-        case .app(let entry):
-            Image(nsImage: AppScanner.cachedIcon(forPath: entry.path))
-                .resizable()
-        case .folder:
-            Image(systemName: "folder.fill")
-                .font(.system(size: 20))
-                .foregroundStyle(Color.accentColor)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    private func activate() {
-        switch item {
-        case .app(let entry):
+        .onTapGesture {
             store.closeSearch()
             store.launch(entry)
-        case .folder(let folder):
-            store.closeSearch()
-            store.expandFolder(folder.id)
         }
     }
 }

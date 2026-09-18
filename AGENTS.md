@@ -84,7 +84,7 @@ Sources/MenuHome/
 ├── GridCarousel / PageGrid           滚动容器（单页、注册 "homePanel" 内容坐标系）/ 单页栅格（.position 按 cellOrigin 摆放）
 ├── CellView / AppCellView / FolderCellView   格子（拖拽手势在 CellView）；App 格；文件夹格
 ├── FolderOverlay                     文件夹卡片（面板内居中）：3 列滚动网格 + 卡片内拖拽 + 行内重命名
-├── SearchOverlay / AddAppOverlay     搜索 / 添加 App 覆盖层（同构：顶栏+Divider+行列表；搜索空查询=全量列表）
+├── SearchOverlay / AddAppOverlay     搜索 / 添加 App 覆盖层（同构：图标+居中输入框+取消 / Divider / 行列表；搜索只列本机 App，空查询=全量，不含文件夹）
 ├── EditBar / EmptyStateView / DragGhostView / JiggleModifier
 ├── AppScanner                        递归扫 4 目录（两层）+ 系统 App 本地化名（loctable/strings）
 ├── RunningMonitor                    NSWorkspace 运行中监听（圆点）

@@ -43,34 +43,27 @@ struct AddAppOverlay: View {
         }
     }
 
-    // MARK: - 顶栏
+    // MARK: - 顶栏（图标 + 居中输入框 + 取消，无标题文字；与搜索覆盖层一致）
 
     private var topBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "plus.circle")
-                .foregroundStyle(.secondary)
-            Text(headerTitle)
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-            Spacer()
+        ZStack {
+            // 输入框在顶栏正中
             TextField("搜索要添加的 App…", text: _query.projectedValue)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 12))
-                .frame(maxWidth: 200)
-            Button("取消") {
-                store.addTarget = nil
+                .frame(width: 200)
+            HStack {
+                Image(systemName: "plus.circle")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("取消") {
+                    store.addTarget = nil
+                }
+                .glassButton()
+                .controlSize(.small)
             }
-            .glassButton()
-            .controlSize(.small)
         }
         .padding(12)
-    }
-
-    private var headerTitle: String {
-        if case .folder(let fid) = target, let folder = store.folder(withID: fid) {
-            return "添加到「\(folder.name)」"
-        }
-        return "添加 App 到桌面"
     }
 
     // MARK: - 列表
