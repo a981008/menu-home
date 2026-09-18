@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// 主面板「桌面」根视图：毛玻璃 + 分页网格 + 页点，按需叠加
 /// 编辑条 / 文件夹展开 / 搜索 / 添加 App 覆盖层（后三者为其他模块实现）
@@ -63,6 +64,13 @@ struct HomeView: View {
         // 面板坐标系：格子拖拽手势与拖影均以此为基准
         .coordinateSpace(name: "homePanel")
         .animation(.easeInOut(duration: 0.2), value: dim)
+        // Finder 拖入 .app 悬停高亮（面板描边）
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.panelRadius)
+                .stroke(Color.accentColor.opacity(store.dropTargeted ? 0.9 : 0), lineWidth: 3)
+                .animation(.easeInOut(duration: 0.15), value: store.dropTargeted)
+                .allowsHitTesting(false)
+        )
         // 启动失败弹窗：App 可能已被删除或移动
         .alert(
             "未找到 App",
@@ -79,6 +87,19 @@ struct HomeView: View {
             }
         } message: {
             Text("找不到「\(store.launchFailure?.name ?? "")」，它可能已被删除或移动。是否从桌面移除？")
+        }
+        // 接收 Finder 拖入的 .app：加入当前页末尾
+        .onDrop(of: [.fileURL], isTargeted: { store.dropTargeted = $0 }) { providers in
+            guard let provider = providers.first else { return false }
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url else { return }
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        store.handleDroppedApp(at: url.path)
+                    }
+                }
+            }
+            return true
         }
     }
 }

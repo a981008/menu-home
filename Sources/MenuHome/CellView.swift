@@ -43,7 +43,7 @@ struct CellView: View {
         .onTapGesture { tap() }
         .contextMenu { menu }
         .help(item.displayName)
-        .simultaneousGesture(editDrag)
+        .simultaneousGesture(dragGesture)
         // 长按进入编辑模式（iPhone 桌面同款入口）
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.35)
@@ -70,30 +70,24 @@ struct CellView: View {
 
     // MARK: - 编辑模式拖拽
 
-    /// 编辑模式的拖拽手势（homePanel 坐标系）；
-    /// 非编辑模式返回一个永不触发的占位手势，保持视图类型一致、避免悬空分支
-    private var editDrag: AnyGesture<DragGesture.Value> {
-        let gesture = DragGesture(minimumDistance: 6, coordinateSpace: .named("homePanel"))
-            .onChanged { v in
-                guard store.editMode else { return }
-                if store.drag == nil {
-                    store.beginDrag(itemID: item.id)
+    /// 拖拽手势（homePanel 坐标系）：任何时候都可拖动排序/合并，无需先进编辑模式
+    private var dragGesture: AnyGesture<DragGesture.Value> {
+        AnyGesture(
+            DragGesture(minimumDistance: 6, coordinateSpace: .named("homePanel"))
+                .onChanged { v in
+                    if store.drag == nil {
+                        store.beginDrag(itemID: item.id)
+                    }
+                    if store.drag != nil {
+                        store.dragMoved(to: v.location, metrics: metrics)
+                    }
                 }
-                if store.drag != nil {
-                    store.dragMoved(to: v.location, metrics: metrics)
+                .onEnded { _ in
+                    if store.drag != nil {
+                        store.endDrag()
+                    }
                 }
-            }
-            .onEnded { _ in
-                if store.drag != nil {
-                    store.endDrag()
-                }
-            }
-        guard store.editMode else {
-            // 最小拖动距离设为无穷大：手势永远不满足触发条件
-            return AnyGesture(DragGesture(minimumDistance: .infinity,
-                                          coordinateSpace: .named("homePanel")))
-        }
-        return AnyGesture(gesture)
+        )
     }
 
     // MARK: - 右键菜单（见设计稿 4.7）

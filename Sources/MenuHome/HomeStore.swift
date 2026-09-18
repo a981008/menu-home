@@ -29,6 +29,9 @@ final class HomeStore: ObservableObject {
     /// 弹出动画锚点（状态栏图标相对面板的水平位置，0=左 1=右）
     @Published var panelAnchor = UnitPoint(x: 0.8, y: 0)
 
+    // Finder 拖入 .app 悬停高亮
+    @Published var dropTargeted = false
+
     // 文件夹展开覆盖层
     @Published var expandedFolderID: UUID?
     @Published var renamingFolderID: UUID?
@@ -397,7 +400,7 @@ final class HomeStore: ObservableObject {
     private var flipWork: DispatchWorkItem?
 
     func beginDrag(itemID: String) {
-        guard drag == nil, editMode,
+        guard drag == nil,
               let idx = flatIndexOf(id: itemID),
               let item = item(withID: itemID) else { return }
         drag = DragSession(item: item, originIndex: idx, currentIndex: idx)
@@ -532,6 +535,13 @@ final class HomeStore: ObservableObject {
         setFlat(items)
         expandFolder(folder.id)
         renamingFolderID = folder.id
+    }
+
+    /// Finder 拖入 .app：构造 AppEntry 并加入当前页末尾；已在桌面则忽略
+    func handleDroppedApp(at path: String) {
+        guard let entry = AppScanner.entry(atPath: path),
+              !allBundleIDs.contains(entry.bundleID) else { return }
+        addApp(entry, to: .desktopPage(page))
     }
 
     /// 拖拽合并：app+app 建新文件夹；app 入文件夹；文件夹收 App / 合并文件夹

@@ -19,6 +19,18 @@ enum AppScanner {
     /// 最大递归层数：0 = 根目录本身，2 = 允许两层子目录
     private static let maxDepth = 2
 
+    /// 从路径构造 AppEntry（Finder 拖入 .app 用）；非 .app 或无 bundle id 返回 nil
+    static func entry(atPath path: String) -> AppEntry? {
+        guard path.hasSuffix(".app"),
+              let bundle = Bundle(url: URL(fileURLWithPath: path)),
+              let bundleID = bundle.bundleIdentifier else { return nil }
+        let fallback =
+            bundle.infoDictionary?["CFBundleDisplayName"] as? String
+            ?? bundle.infoDictionary?["CFBundleName"] as? String
+            ?? ((path as NSString).lastPathComponent as NSString).deletingPathExtension
+        return AppEntry(bundleID: bundleID, name: displayName(for: bundle, fallback: fallback), path: path)
+    }
+
     static func scanApps() -> [AppEntry] {
         let selfBundleID = Bundle.main.bundleIdentifier
 
