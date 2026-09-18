@@ -85,6 +85,18 @@ struct AddAppOverlay: View {
                 ForEach(filtered) { entry in
                     AddAppRow(entry: entry, target: target)
                 }
+                if filtered.isEmpty {
+                    Text(apps.isEmpty ? "正在扫描本机 App…" : "没有匹配「\(query)」的 App")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 24)
+                }
+            }
+        }
+        .task {
+            // 打开覆盖层时扫描一次本机 App（复用已有结果则不重扫）
+            if apps.isEmpty {
+                apps = AppScanner.scanApps()
             }
         }
     }
