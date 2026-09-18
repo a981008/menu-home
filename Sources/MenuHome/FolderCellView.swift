@@ -17,6 +17,7 @@ struct FolderCellView: View {
             Text(folder.name)
                 .font(.system(size: 11, weight: .medium))
                 .lineLimit(1)
+                .truncationMode(.tail)
         }
     }
 

@@ -15,6 +15,8 @@ struct DragGhostView: View {
             ghostIcon
             Text(item.displayName)
                 .font(.system(size: 11, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .foregroundStyle(.primary)
         }
         .padding(8)

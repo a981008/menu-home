@@ -122,6 +122,8 @@ private struct AddAppRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.name)
                     .font(.system(size: 13))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Text((entry.path as NSString).deletingLastPathComponent)
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
