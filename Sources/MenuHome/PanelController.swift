@@ -52,9 +52,12 @@ final class PanelController: NSObject, NSWindowDelegate {
     func toggle(statusIconFrame: NSRect) {
         if panel.isVisible {
             if closeWork != nil {
-                // 正在收起 → 反向弹回
+                // 正在收起 → 反向弹回：closeWork 里挂着的 orderOut + resetTransientState
+                // 会随 cancel 一并作废，必须在这里补复位，否则编辑模式/拖拽会话
+                // 会原样带回面板（「重开后抖动残留」的根因）
                 closeWork?.cancel()
                 closeWork = nil
+                store.resetTransientState()
                 store.panelVisible = true
                 refreshShadow()
             } else {
@@ -67,6 +70,8 @@ final class PanelController: NSObject, NSWindowDelegate {
             updateAnchor()
             closeWork?.cancel()
             closeWork = nil
+            // 防御性复位：保证每次弹出都是干净状态（不依赖上次关闭路径是否执行了复位）
+            store.resetTransientState()
             store.panelVisible = false          // 首帧以缩小 + 透明状态出现
             panel.makeKeyAndOrderFront(nil)
             refreshShadow()

@@ -112,7 +112,7 @@ docs/ui-design.md                     UI 设计文档（v1.0）
    - **手势流（v1.1 重构）**：桌面拖拽由 **GridCarousel 内容层的单一手势全程驱动**（`startLocation` 所在格提起 → `dragMoved` → `endDrag`），宿主在拖拽全程存活；**不要**把拖拽手势挂回格子 —— 提起即移除格子视图，手势交付不可靠。长按不再进入整理模式（唯一入口：右键「整理桌面…」；退出：✓完成 / 点面板空白处 / 面板关闭时 `resetTransientState` 复位）
    - **性能红线**：光标高频移动只写 `store.ghost`（独立 GhostTracker，只重渲染拖影）与非发布态 `liveIndex`；`@Published` 仅在跨格/合并态等结构变化时更新。鼠标移动事件可达数百 Hz，逐事件发布会让整棵视图树重渲染（卡顿根因）。图标读取一律用 `AppScanner.cachedIcon(forPath:)`（NSCache），别直接调 `NSWorkspace.icon(forFile:)`
 5. **拖拽坐标系**：桌面拖拽的 `"homePanel"` 由 **GridCarousel 的滚动内容**注册 —— 手势坐标随滚动一致；文件夹卡片内拖拽用 `.named("folderCard")`。
-6. **面板开合动画**：`store.panelVisible` + `store.panelAnchor`（状态栏图标在面板上的相对锚点）驱动 scale/opacity；窗口先出现、下一帧置 visible。收起 = 先收缩、0.3s 后 `orderOut` + `resetTransientState()`（`closeWork` 延迟任务；收起途中再点图标会反向弹回）。
+6. **面板开合动画**：`store.panelVisible` + `store.panelAnchor`（状态栏图标在面板上的相对锚点）驱动 scale/opacity；窗口先出现、下一帧置 visible。收起 = 先收缩、0.3s 后 `orderOut` + `resetTransientState()`（`closeWork` 延迟任务；收起途中再点图标会反向弹回）。**任何让面板重新可见的路径（全新弹出 / 反向弹回）都必须先 `resetTransientState()`** —— 弹回会 cancel 掉 closeWork，其挂着的复位随之作废，不复位就会把编辑模式/拖拽会话原样带回面板（「重开后抖动残留」的根因）
 7. **文件夹开合**：`folderSourceRect`（点击时记录的图标矩形）作为动画锚点，卡片 transition 以它缩放展开/缩回；卡片在面板内**正中**（无偏移），内容超过 3×3 在卡片内滚动（`FolderScrollGrid`，拖拽格子换算要加 `scrollOffset`）。
 8. **持久化**：`~/Library/Application Support/MenuHome/layout.json`（pages + settings，文件夹有稳定 UUID）。**pages 现在恒为单元素数组**（旧多页文件在 load 时扁平迁移）；`AppSettings.init(from:)` 用 decodeIfPresent 兼容旧文件缺字段。拖拽期间落盘会被推迟（`persistPending`），拖拽结束统一补写；写盘在后台队列执行（`persistNow`），别把文件 I/O 挪回主线程。**做会改动布局的自动化测试前先备份该文件，测完还原**。
 9. **UI 文案全部简体中文**，代码注释也用中文。
