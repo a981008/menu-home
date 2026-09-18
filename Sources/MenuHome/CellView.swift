@@ -44,6 +44,14 @@ struct CellView: View {
         .contextMenu { menu }
         .help(item.displayName)
         .simultaneousGesture(editDrag)
+        // 长按进入编辑模式（iPhone 桌面同款入口）
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.35)
+                .onEnded { _ in
+                    guard !store.editMode else { return }
+                    withAnimation { store.editMode = true }
+                }
+        )
         // 悬停缩放 / 合并候选放大动效（设计稿 4.2：120ms）
         .animation(.easeInOut(duration: 0.12), value: hovering)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isMergeTarget)
@@ -99,6 +107,7 @@ struct CellView: View {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: a.path)])
             }
             Divider()
+            Button("移入新文件夹") { store.moveIntoNewFolder(itemID: item.id) }
             Button("从桌面移除", role: .destructive) {
                 // 仅移除快捷方式，不卸载 App
                 store.removeItem(id: item.id)

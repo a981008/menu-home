@@ -413,12 +413,19 @@ final class HomeStore: ObservableObject {
         } else if point.x > metrics.pageW - metrics.hPad * 0.9, page < pages.count - 1 {
             scheduleFlip(delta: 1)
         }
-        // 实时让位
+        // 实时让位 + 悬停合并
         if let idx = metrics.flatIndex(at: point, page: page) {
+            // 先取光标所在格的占用者（live-move 会把拖拽项插进来，之后光标下就是自己了）
+            let items = flatItems
+            let occupantID: String? = idx < items.count ? items[idx].id : nil
             if let cur = drag?.currentIndex, idx != cur, let id = drag?.itemID {
                 moveItem(id: id, toFlatIndex: idx)
             }
-            updateMergeHold(point: point, metrics: metrics)
+            if occupantID == drag?.itemID {
+                // 光标在自己格子上（live-move 后的常态）：保留进行中的合并等待
+            } else {
+                updateMergeHold(targetID: occupantID)
+            }
         } else {
             cancelMergeHold()
         }
@@ -460,32 +467,31 @@ final class HomeStore: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: wi)
     }
 
-    private func updateMergeHold(point: CGPoint, metrics: GridMetrics) {
+    /// 光标所在格的占用者变化时，重排「悬停 0.4s 合并」等待
+    private func updateMergeHold(targetID: String?) {
         guard let d = drag else { return }
-        guard let slot = metrics.slot(at: point) else {
+        guard let targetID, targetID != d.itemID else {
             cancelMergeHold()
             return
         }
-        let idx = page * metrics.capacity + slot.row * metrics.columns + slot.col
-        let items = flatItems
-        guard idx < items.count, items[idx].id != d.itemID else {
-            cancelMergeHold()
-            return
+        // 同一目标：保留进行中的等待（不重置计时）
+        guard holdTargetID != targetID else { return }
+        holdWork?.cancel()
+        // 离开上一个候选：清掉已亮出的合并标记
+        if var d = drag, d.mergeCandidateID != nil {
+            d.mergeCandidateID = nil
+            drag = d
         }
-        let targetID = items[idx].id
-        if holdTargetID != targetID {
-            holdWork?.cancel()
-            holdTargetID = targetID
-            let wi = DispatchWorkItem { [weak self] in
-                MainActor.assumeIsolated {
-                    guard let self, var d = self.drag, d.mergeCandidateID != targetID else { return }
-                    d.mergeCandidateID = targetID
-                    self.drag = d
-                }
+        holdTargetID = targetID
+        let wi = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, var d = self.drag, d.mergeCandidateID != targetID else { return }
+                d.mergeCandidateID = targetID
+                self.drag = d
             }
-            holdWork = wi
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: wi)
         }
+        holdWork = wi
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: wi)
     }
 
     private func cancelMergeHold() {
@@ -509,6 +515,18 @@ final class HomeStore: ObservableObject {
             d.currentIndex = idx
             drag = d
         }
+    }
+
+    /// 把单个 App 收进一个新文件夹（App 右键菜单「移入新文件夹」）
+    func moveIntoNewFolder(itemID: String) {
+        guard let idx = flatIndexOf(id: itemID),
+              case .app(let entry) = flatItems[idx] else { return }
+        var items = flatItems
+        let folder = FolderEntry(name: "新建文件夹", items: [.app(entry)])
+        items[idx] = .folder(folder)
+        setFlat(items)
+        expandFolder(folder.id)
+        renamingFolderID = folder.id
     }
 
     /// 拖拽合并：app+app 建新文件夹；app 入文件夹；文件夹收 App / 合并文件夹
