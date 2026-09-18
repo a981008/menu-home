@@ -8,8 +8,17 @@ struct FolderCellView: View {
     let folder: FolderEntry
     let metrics: GridMetrics
 
-    /// 盒子边长（格宽 - 30）
+    /// 盒子边长（格宽 - 30，与 App 图标同尺寸）
     private var iconPt: CGFloat { metrics.cellW - 30 }
+
+    /// 桌面相邻图标的边缘间隙（格内边距 15×2 + 列距 12）
+    private var gridGap: CGFloat { 30 + metrics.hGap }
+
+    /// 缩略图间隙：与桌面「图标:间隙」严格等比例（3×mini + 4×gap = 盒边长）
+    private var thumbGap: CGFloat { iconPt * gridGap / (3 * iconPt + 4 * gridGap) }
+
+    /// 缩略图边长：等比例对应桌面图标（mini:gap = 图标:桌面间隙）
+    private var thumbSize: CGFloat { iconPt * thumbGap / gridGap }
 
     var body: some View {
         VStack(spacing: 4) {
@@ -35,18 +44,18 @@ struct FolderCellView: View {
                     .font(.system(size: iconPt * 0.4, weight: .medium))
                     .foregroundStyle(.secondary)
             } else {
-                // 3×3 微缩图标（最多前 9 个）：固定尺寸小格、从左上角排起（iPhone 同款）
+                // 3×3 微缩图标（最多前 9 个）：与桌面网格等比例、从左上角排起（iPhone 同款）
                 LazyVGrid(
-                    columns: Array(repeating: GridItem(.fixed(iconPt * 0.28), spacing: 2), count: 3),
-                    spacing: 2
+                    columns: Array(repeating: GridItem(.fixed(thumbSize), spacing: thumbGap), count: 3),
+                    spacing: thumbGap
                 ) {
                     ForEach(folder.items.compactMap { $0.appEntry }.prefix(9)) { mini in
                         Image(nsImage: NSWorkspace.shared.icon(forFile: mini.path))
                             .resizable()
-                            .frame(width: iconPt * 0.26, height: iconPt * 0.26)
+                            .frame(width: thumbSize, height: thumbSize)
                     }
                 }
-                .padding(iconPt * 0.08)
+                .padding(thumbGap)
                 .frame(width: iconPt, height: iconPt, alignment: .topLeading)
             }
         }
