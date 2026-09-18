@@ -98,7 +98,15 @@ final class HomeStore: ObservableObject {
             persistPending = true
             return
         }
-        let wi = DispatchWorkItem { [weak self] in self?.persistNow() }
+        let wi = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            // 触发时若又回到拖拽中（如 beginDrag 的 setFlat 先于 drag 赋值调度），继续顺延
+            if self.drag != nil {
+                self.persistPending = true
+                return
+            }
+            self.persistNow()
+        }
         persistWork = wi
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: wi)
     }
@@ -426,6 +434,9 @@ final class HomeStore: ObservableObject {
     private var holdTargetID: String?
     private var flipWork: DispatchWorkItem?
 
+    /// 拖影提交节流时间戳（~80fps）
+    private var lastGhostCommit: CFTimeInterval = 0
+
     func beginDrag(itemID: String) {
         guard drag == nil,
               let idx = flatIndexOf(id: itemID),
@@ -443,8 +454,13 @@ final class HomeStore: ObservableObject {
     /// 否则每个鼠标事件都会触发整棵视图树重渲染（卡顿根因）。
     func dragMoved(to point: CGPoint, metrics: GridMetrics) {
         guard drag != nil else { return }
-        ghost.point = point
-        ghost.started = true
+        // 拖影提交节流（~80fps）：高报告率鼠标（125–1000Hz）下限制拖影重渲染频率
+        let now = CACurrentMediaTime()
+        if !ghost.started || now - lastGhostCommit >= 0.012 {
+            ghost.point = point
+            ghost.started = true
+            lastGhostCommit = now
+        }
         // 边缘悬停自动翻页
         flipWork?.cancel()
         flipWork = nil

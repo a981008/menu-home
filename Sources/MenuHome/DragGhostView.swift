@@ -31,7 +31,6 @@ struct DragGhostView: View {
                 .stroke(merging ? Color.primary.opacity(0.5) : .clear, lineWidth: 2)
         )
         .scaleEffect(1.1)
-        .shadow(color: .black.opacity(0.25), radius: 12)
         .position(tracker.point)
     }
 
