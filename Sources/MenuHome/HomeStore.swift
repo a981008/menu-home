@@ -24,6 +24,11 @@ final class HomeStore: ObservableObject {
     // 编辑模式（抖动）
     @Published var editMode = false
 
+    // 面板显隐动画（控制中心式：从状态栏图标弹出/缩回）
+    @Published var panelVisible = false
+    /// 弹出动画锚点（状态栏图标相对面板的水平位置，0=左 1=右）
+    @Published var panelAnchor = UnitPoint(x: 0.8, y: 0)
+
     // 文件夹展开覆盖层
     @Published var expandedFolderID: UUID?
     @Published var renamingFolderID: UUID?

@@ -54,8 +54,12 @@ struct HomeView: View {
             }
         }
         .frame(width: metrics.pageW, height: metrics.panelH)
-        // 面板本体：液态玻璃大圆角（macOS 26+ glassEffect / 旧系统厚材质）
+        // 面板本体：液态玻璃大圆角
         .liquidGlass(cornerRadius: Theme.panelRadius)
+        // 控制中心式弹出动画：以状态栏图标为锚点缩放 + 淡入
+        .scaleEffect(store.panelVisible ? 1 : 0.7, anchor: store.panelAnchor)
+        .opacity(store.panelVisible ? 1 : 0)
+        .animation(.spring(response: 0.32, dampingFraction: 0.82), value: store.panelVisible)
         // 面板坐标系：格子拖拽手势与拖影均以此为基准
         .coordinateSpace(name: "homePanel")
         .animation(.easeInOut(duration: 0.2), value: dim)

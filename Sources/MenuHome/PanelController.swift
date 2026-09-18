@@ -47,22 +47,59 @@ final class PanelController: NSObject, NSWindowDelegate {
         if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor) }
     }
 
-    // MARK: - 显隐与定位
+    // MARK: - 显隐与定位（控制中心式弹出动画）
+
+    /// 收起动画的延迟 orderOut 任务（非 nil = 正在收起）
+    private var closeWork: DispatchWorkItem?
 
     func toggle(statusIconFrame: NSRect) {
         if panel.isVisible {
-            hide()
+            if closeWork != nil {
+                // 正在收起 → 反向弹回
+                closeWork?.cancel()
+                closeWork = nil
+                store.panelVisible = true
+            } else {
+                hide()
+            }
         } else {
             lastIconFrame = statusIconFrame
             resize(to: store.metrics)
             positionPanel()
+            updateAnchor()
+            closeWork?.cancel()
+            closeWork = nil
+            store.panelVisible = false          // 首帧以缩小 + 透明状态出现
             panel.makeKeyAndOrderFront(nil)
+            DispatchQueue.main.async { [weak self] in
+                self?.store.panelVisible = true // 下一帧向图标锚点弹开
+            }
         }
     }
 
     func hide() {
-        store.resetTransientState()
-        panel.orderOut(nil)
+        guard closeWork == nil else { return }  // 已在收起动画中
+        store.panelVisible = false              // 触发 SwiftUI 缩回动画
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.panel.orderOut(nil)
+                self.store.resetTransientState()
+                self.closeWork = nil
+            }
+        }
+        closeWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+    }
+
+    /// 计算弹出锚点：状态栏图标在面板宽度上的相对位置
+    private func updateAnchor() {
+        let f = panel.frame
+        guard f.width > 0 else { return }
+        let rx = lastIconFrame == .zero
+            ? 0.8
+            : (lastIconFrame.midX - f.minX) / f.width
+        store.panelAnchor = UnitPoint(x: min(0.85, max(0.15, rx)), y: 0)
     }
 
     func resize(to metrics: GridMetrics) {
