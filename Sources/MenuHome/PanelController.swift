@@ -56,6 +56,7 @@ final class PanelController: NSObject, NSWindowDelegate {
                 closeWork?.cancel()
                 closeWork = nil
                 store.panelVisible = true
+                refreshShadow()
             } else {
                 hide()
             }
@@ -68,6 +69,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             closeWork = nil
             store.panelVisible = false          // 首帧以缩小 + 透明状态出现
             panel.makeKeyAndOrderFront(nil)
+            refreshShadow()
             DispatchQueue.main.async { [weak self] in
                 self?.store.panelVisible = true // 下一帧向图标锚点弹开
             }
@@ -99,9 +101,26 @@ final class PanelController: NSObject, NSWindowDelegate {
         store.panelAnchor = UnitPoint(x: min(0.85, max(0.15, rx)), y: 0)
     }
 
+    /// 强制 AppKit 按当前内容可见形状重算窗口阴影。
+    /// 无边框透明窗口的阴影形状会被缓存（首次采样常为整窗矩形），
+    /// 不重算就会在圆角外留下直角阴影边界 —— 「圆角外矩形溢出」的根因。
+    private func refreshShadow() {
+        panel.invalidateShadow()
+        // 首帧渲染与弹出缩放动画期间可见形状仍在变化，延迟补采样两次
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+            MainActor.assumeIsolated { self?.panel.invalidateShadow() }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+            MainActor.assumeIsolated { self?.panel.invalidateShadow() }
+        }
+    }
+
     func resize(to metrics: GridMetrics) {
         panel.setContentSize(NSSize(width: metrics.pageW, height: metrics.panelH))
-        if panel.isVisible { positionPanel() }
+        if panel.isVisible {
+            positionPanel()
+            panel.invalidateShadow()
+        }
     }
 
     private func positionPanel() {

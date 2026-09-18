@@ -7,6 +7,7 @@
 # CLT 未随附 SwiftUIMacros 插件；仓库源码已手工脱糖 @State，因此 swiftc 直编
 # 在 CLT / Xcode 下都能通过。
 set -euo pipefail
+set +u
 cd "$(dirname "$0")/.."
 
 MODE="${1:-release}"   # release（默认）| debug

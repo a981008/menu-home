@@ -125,6 +125,7 @@ docs/ui-design.md                     UI 设计文档（v1.0）
 - 文件夹卡片内拖拽坐标在卡片空间（"folderCard"），格子换算需加滚动偏移 `scrollOffset`（onScrollGeometryChange 跟踪）
 - 玻璃容器（面板/卡片/浮层）内的 ScrollView 必须 `.clipShape` 对齐容器圆角（`Theme.scrollClipRadius` 或容器圆角），否则滚动内容/滚轴溢出圆角出现直角外露；滚轴一律 `.appScrollbar()`（自定义胶囊：右缘间距 8pt、轨道上下内收 12pt —— 28 圆角在拇指 x 处深切约 8.4pt，内收保证拇指全程不被裁）；禁用系统滚轴必须用 `.scrollIndicators(.never)`（`showsIndicators: false` 与 `.hidden` 在 macOS 26 玻璃滚轴下压不住，会和自定义胶囊叠成两条）；本 SDK 无 `scrollIndicatorInsets`
 - `glassEffect` 形状必须用显式 `RoundedRectangle(cornerRadius:style: .continuous)`（`.rect(cornerRadius:)` 在玻璃合成下圆角可能不完整）
+- 无边框透明 NSPanel 的窗口阴影形状会被 AppKit 缓存（首次采样 = 整窗矩形）：圆角面板外出现直角阴影边界时，须在弹出/回弹/改尺寸后调用 `panel.invalidateShadow()`（PanelController.refreshShadow，含 0.08s/0.45s 延迟补采样覆盖弹出动画）
 - `NSEvent.momentumPhase` 是 OptionSet：判空用 `!event.momentumPhase.isEmpty`（没有 `.zero`）
 - 终端无屏幕录制权限（TCC），`screencapture` 截不了屏 —— 验证视觉改动靠构建 + 用户确认
 
