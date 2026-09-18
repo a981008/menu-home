@@ -160,10 +160,13 @@ struct GridMetrics: Equatable {
     var topPad: CGFloat = 16
     var dotsHeight: CGFloat = 0
 
+    /// 常驻搜索栏顶部区（含上边距）：10 + 栏高 30 + 呼吸 2
+    var searchBarArea: CGFloat = 42
+
     /// 单页（整面板）宽度
     var pageW: CGFloat { hPad * 2 + CGFloat(columns) * cellW + CGFloat(columns - 1) * hGap }
     var gridH: CGFloat { CGFloat(rows) * (cellH + vGap) - vGap }
-    var panelH: CGFloat { topPad + gridH + 12 }
+    var panelH: CGFloat { searchBarArea + topPad + gridH + 12 }
     var capacity: Int { columns * rows }
 
     /// 主网格：列数/行数 4/5/6，格子宽 = 图标 + 30，高 = 图标 + 32

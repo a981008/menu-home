@@ -80,7 +80,7 @@ Sources/MenuHome/
 ├── HomeStore ★                       唯一状态源（@MainActor ObservableObject）：
 │                                     pages/settings/拖拽会话/覆盖层状态/持久化
 ├── Models                            HomeItem / AppEntry / FolderEntry / GridMetrics / IconSize / AppSettings
-├── HomeView                          面板根：玻璃面板 + ZStack 覆盖层 + .onDrop(Finder 拖入)
+├── HomeView                          面板根：玻璃面板 + 常驻搜索栏（ResidentSearchBar，顶部居中）+ ZStack 覆盖层 + .onDrop(Finder 拖入)
 ├── GridCarousel / PageGrid           滚动容器（单页、注册 "homePanel" 内容坐标系）/ 单页栅格（.position 按 cellOrigin 摆放）
 ├── CellView / AppCellView / FolderCellView   格子（拖拽手势在 CellView）；App 格；文件夹格
 ├── FolderOverlay                     文件夹卡片：3×3 分页网格 + 卡片内拖拽 + 行内重命名

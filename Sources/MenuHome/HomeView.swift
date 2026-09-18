@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 主面板「桌面」根视图：毛玻璃 + 分页网格 + 页点，按需叠加
+/// 主面板「桌面」根视图：毛玻璃 + 顶部常驻搜索栏 + 滚动网格，按需叠加
 /// 编辑条 / 文件夹展开 / 搜索 / 添加 App 覆盖层（后三者为其他模块实现）
 struct HomeView: View {
 
@@ -16,11 +16,17 @@ struct HomeView: View {
 
     var body: some View {
         ZStack {
-            // 分页桌面网格：有覆盖层时压暗 + 模糊，且不响应点击
+            // 滚动桌面网格：有覆盖层时压暗 + 模糊，且不响应点击；顶部常驻搜索栏（编辑模式时让位给整理条）
             GridCarousel()
                 .blur(radius: dim ? 16 : 0)
                 .opacity(dim ? 0.45 : 1)
                 .allowsHitTesting(!dim)
+                .safeAreaInset(edge: .top) {
+                    if !store.editMode {
+                        ResidentSearchBar()
+                            .padding(.top, 10)
+                    }
+                }
 
             // 空状态引导（首次启动 / 桌面被清空）
             if store.isEmpty {
@@ -80,7 +86,7 @@ struct HomeView: View {
         } message: {
             Text("找不到「\(store.launchFailure?.name ?? "")」，它可能已被删除或移动。是否从桌面移除？")
         }
-        // 接收 Finder 拖入的 .app：加入当前页末尾
+        // 接收 Finder 拖入的 .app：加入桌面末尾
         .onDrop(of: [.fileURL], isTargeted: $store.dropTargeted) { providers in
             guard let provider = providers.first else { return false }
             _ = provider.loadObject(ofClass: URL.self) { url, _ in
@@ -93,5 +99,41 @@ struct HomeView: View {
             }
             return true
         }
+    }
+}
+
+/// 常驻搜索栏：面板顶部居中；点击进入搜索覆盖层
+/// （覆盖层输入框与「添加 App」搜索框同款样式：roundedBorder / 12pt / 宽 200）
+struct ResidentSearchBar: View {
+
+    @EnvironmentObject var store: HomeStore
+
+    // 手工脱糖的 @State（本机 CLT 缺宏插件）
+    private var _hovering: State<Bool> = State(initialValue: false)
+    private var hovering: Bool {
+        get { _hovering.wrappedValue }
+        nonmutating set { _hovering.wrappedValue = newValue }
+    }
+
+    var body: some View {
+        Button {
+            store.openSearch(seed: "")
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12, weight: .medium))
+                Text("搜索 App")
+                    .font(.system(size: 12))
+            }
+            .foregroundStyle(.secondary)
+            .padding(.leading, 12)
+            .frame(width: 200, height: 30, alignment: .leading)
+            .contentShape(Rectangle())
+            .liquidGlass(cornerRadius: Theme.searchBarRadius)
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(hovering ? 1.03 : 1)
+        .animation(.easeInOut(duration: 0.12), value: hovering)
+        .onHover { hovering = $0 }
     }
 }

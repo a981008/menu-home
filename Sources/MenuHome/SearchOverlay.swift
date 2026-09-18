@@ -1,7 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// 搜索覆盖层（非常驻：键盘直入或 ⌘F 呼出，从顶部滑下）
+/// 搜索覆盖层（由顶部常驻搜索栏 / 键盘直入 / ⌘F 呼出，从顶部滑下；
+/// 输入框与「添加 App」搜索框同款样式：roundedBorder / 12pt / 宽 200）
 struct SearchOverlay: View {
     @EnvironmentObject var store: HomeStore
 
@@ -36,12 +37,12 @@ struct SearchOverlay: View {
     }
 
     private var searchField: some View {
+        // 与「添加 App」顶栏搜索框统一样式：roundedBorder / 12pt / 宽 200，居中
         HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
             TextField("搜索 App…", text: _query.projectedValue)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 12))
+                .frame(width: 200)
                 .focused($focused)
                 .onSubmit { activateFirst() }
             if !query.isEmpty {
@@ -55,8 +56,7 @@ struct SearchOverlay: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+        .frame(maxWidth: .infinity)
         .onAppear {
             query = store.searchSeedText
             focused = true
