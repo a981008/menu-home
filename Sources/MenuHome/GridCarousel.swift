@@ -1,34 +1,33 @@
 import SwiftUI
 
-/// 分页桌面轮播：横向 HStack 摆放所有页，按 store.page 偏移；拖拽时叠加拖影
+/// 桌面网格：单页可滚动 —— 行数 4/5/6 可设，内容超出可视区即滚动（不再分页）。
+/// 拖影与拖拽手势都使用滚动内容坐标系（"homePanel"）：坐标随滚动一致，滚到哪拖到哪。
 struct GridCarousel: View {
 
     @EnvironmentObject var store: HomeStore
 
     private var metrics: GridMetrics { store.metrics }
 
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            // 分页网格
-            GeometryReader { geo in
-                HStack(spacing: 0) {
-                    ForEach(store.pages.indices, id: \.self) { p in
-                        PageGrid(pageIndex: p, metrics: metrics)
-                            .frame(width: geo.size.width,
-                                   height: geo.size.height,
-                                   alignment: .topLeading)
-                            .clipped()
-                    }
-                }
-                .offset(x: -CGFloat(store.page) * geo.size.width)
-                .animation(.spring(response: 0.3, dampingFraction: 0.92), value: store.page)
-            }
+    /// 内容高度：随条目数增长；不足一屏时保持满屏
+    private var contentHeight: CGFloat {
+        let rowsNeeded = max(metrics.rows, (store.flatItems.count + metrics.columns - 1) / metrics.columns)
+        return metrics.topPad + CGFloat(rowsNeeded) * (metrics.cellH + metrics.vGap) - metrics.vGap + 12
+    }
 
-            // 拖影跟随（拖拽中；不拦截事件）。位置来自独立 tracker：移动只重渲染拖影
-            if let d = store.drag, store.ghost.started {
-                DragGhostView(item: d.item, tracker: store.ghost, merging: d.mergeCandidateID != nil)
-                    .allowsHitTesting(false)
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            ZStack(alignment: .topLeading) {
+                PageGrid(metrics: metrics)
+                    .frame(width: metrics.pageW, height: contentHeight, alignment: .topLeading)
+
+                // 拖影跟随（拖拽中；不拦截事件），位置在内容坐标系
+                if let d = store.drag, store.ghost.started {
+                    DragGhostView(item: d.item, tracker: store.ghost, merging: d.mergeCandidateID != nil)
+                        .allowsHitTesting(false)
+                }
             }
+            .frame(width: metrics.pageW, height: contentHeight, alignment: .topLeading)
+            .coordinateSpace(name: "homePanel")
         }
     }
 }

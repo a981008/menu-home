@@ -16,7 +16,7 @@ struct EmptyStateView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
             Button("＋ 添加第一个 App") {
-                store.addTarget = .desktopPage(store.page)
+                store.addTarget = .desktop
             }
             .glassProminentButton()
         }

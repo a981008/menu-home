@@ -49,9 +49,6 @@ final class HomeStore: ObservableObject {
     // 添加 App 覆盖层
     @Published var addTarget: AddTarget?
 
-    // 当前页
-    @Published var page = 0
-
     // 正在运行 / 已缺失（路径失效）的 bundle id
     @Published var runningBundleIDs: Set<String> = []
     @Published var missingBundleIDs: Set<String> = []
@@ -134,7 +131,9 @@ final class HomeStore: ObservableObject {
             pages = [[]]
             return
         }
-        pages = file.pages.isEmpty ? [[]] : file.pages
+        // 旧版多页布局扁平迁移：合并为单列表（桌面已改为滚动，不分页）
+        let merged = file.pages.flatMap { $0 }
+        pages = [merged]
         settings = file.settings
         refreshMissing()
     }
@@ -147,49 +146,17 @@ final class HomeStore: ObservableObject {
         if searchActive { closeSearch() }
         addTarget = nil
         if drag != nil { cancelDrag() }
-        let maxP = max(0, pages.count - 1)
-        if page > maxP { page = maxP }
     }
 
-    // MARK: - 栅格与分页
+    // MARK: - 栅格（单列表，超出可视行数即滚动）
 
-    var metrics: GridMetrics { .make(columns: settings.columns, iconSize: settings.iconSize) }
-    var capacity: Int { metrics.capacity }
+    var metrics: GridMetrics { .make(columns: settings.columns, rows: settings.rows, iconSize: settings.iconSize) }
     var flatItems: [HomeItem] { pages.flatMap { $0 } }
     var isEmpty: Bool { flatItems.isEmpty }
 
-    private func chunk(_ items: [HomeItem]) -> [[HomeItem]] {
-        var out: [[HomeItem]] = []
-        var i = 0
-        while i < items.count {
-            out.append(Array(items[i..<min(i + capacity, items.count)]))
-            i += capacity
-        }
-        if out.isEmpty { out = [[]] }
-        return out
-    }
-
     private func setFlat(_ items: [HomeItem]) {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-            pages = chunk(items)
-        }
-        clampPage()
-    }
-
-    private func clampPage() {
-        let maxP = max(0, pages.count - 1)
-        if page > maxP { page = maxP }
-    }
-
-    func changePage(by delta: Int) {
-        goToPage(page + delta)
-    }
-
-    func goToPage(_ p: Int) {
-        let maxP = max(0, pages.count - 1)
-        let np = max(0, min(maxP, p))
-        if np != page {
-            withAnimation(.easeInOut(duration: 0.25)) { page = np }
+            pages = [items]
         }
     }
 
@@ -316,9 +283,8 @@ final class HomeStore: ObservableObject {
     func addApp(_ entry: AppEntry, to target: AddTarget) {
         var items = flatItems
         switch target {
-        case .desktopPage(let p):
-            let insertAt = min((p + 1) * capacity, items.count)
-            items.insert(.app(entry), at: insertAt)
+        case .desktop:
+            items.append(.app(entry))
         case .folder(let fid):
             guard let fi = folderIndex(id: fid, in: items),
                   case .folder(var f) = items[fi] else { return }
@@ -344,12 +310,11 @@ final class HomeStore: ObservableObject {
         setFlat(items)
     }
 
-    /// 在当前页末尾新建空文件夹，并打开进入重命名
+    /// 在桌面末尾新建空文件夹，并打开进入重命名
     func newFolder() {
         var items = flatItems
-        let insertAt = min((page + 1) * capacity, items.count)
         let folder = FolderEntry(name: "新建文件夹")
-        items.insert(.folder(folder), at: insertAt)
+        items.append(.folder(folder))
         setFlat(items)
         expandedFolderID = folder.id
         renamingFolderID = folder.id
@@ -432,7 +397,6 @@ final class HomeStore: ObservableObject {
 
     private var holdWork: DispatchWorkItem?
     private var holdTargetID: String?
-    private var flipWork: DispatchWorkItem?
 
     /// 拖影提交节流时间戳（~80fps）
     private var lastGhostCommit: CFTimeInterval = 0
@@ -461,16 +425,9 @@ final class HomeStore: ObservableObject {
             ghost.started = true
             lastGhostCommit = now
         }
-        // 边缘悬停自动翻页
-        flipWork?.cancel()
-        flipWork = nil
-        if point.x < metrics.hPad * 0.9, page > 0 {
-            scheduleFlip(delta: -1)
-        } else if point.x > metrics.pageW - metrics.hPad * 0.9, page < pages.count - 1 {
-            scheduleFlip(delta: 1)
-        }
-        // 光标所在格：拖拽项已提起，占用者稳定不动（合并目标不再漂移）
-        if let idx = metrics.flatIndex(at: point, page: page) {
+        // 光标所在格：拖拽项已提起，占用者稳定不动（合并目标不再漂移）；
+        // 内容坐标系随滚动一致，滚到哪拖到哪
+        if let idx = metrics.index(at: point) {
             liveIndex = idx
             updateMergeHold(targetID: idx < flatItems.count ? flatItems[idx].id : nil)
         } else {
@@ -479,8 +436,6 @@ final class HomeStore: ObservableObject {
     }
 
     func endDrag() {
-        flipWork?.cancel()
-        flipWork = nil
         holdWork?.cancel()
         holdWork = nil
         holdTargetID = nil
@@ -502,8 +457,6 @@ final class HomeStore: ObservableObject {
 
     /// 拖拽取消（松手在无效区域）：放回原位
     func cancelDrag() {
-        flipWork?.cancel()
-        flipWork = nil
         holdWork?.cancel()
         holdWork = nil
         holdTargetID = nil
@@ -514,16 +467,6 @@ final class HomeStore: ObservableObject {
         items.insert(d.item, at: max(0, min(d.originIndex, items.count)))
         setFlat(items)
         flushPendingPersist()
-    }
-
-    private func scheduleFlip(delta: Int) {
-        let wi = DispatchWorkItem { [weak self] in
-            MainActor.assumeIsolated {
-                self?.changePage(by: delta)
-            }
-        }
-        flipWork = wi
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: wi)
     }
 
     /// 光标所在格的占用者变化时，重排「悬停 0.4s 合并」等待
@@ -581,11 +524,11 @@ final class HomeStore: ObservableObject {
         renamingFolderID = folder.id
     }
 
-    /// Finder 拖入 .app：构造 AppEntry 并加入当前页末尾；已在桌面则忽略
+    /// Finder 拖入 .app：构造 AppEntry 并加入桌面末尾；已在桌面则忽略
     func handleDroppedApp(at path: String) {
         guard let entry = AppScanner.entry(atPath: path),
               !allBundleIDs.contains(entry.bundleID) else { return }
-        addApp(entry, to: .desktopPage(page))
+        addApp(entry, to: .desktop)
     }
 
     /// 拖拽合并（拖拽项已提起、不在网格中）：app+app 建新夹；app 入夹；夹收 App / 夹并夹

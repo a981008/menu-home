@@ -107,11 +107,36 @@ struct HotKeySpec: Codable, Equatable {
 
 struct AppSettings: Codable, Equatable {
     var columns: Int = 5
+    var rows: Int = 5
     var iconSize: IconSize = .medium
     var launchClosesPanel: Bool = true
     var showRunningDot: Bool = true
     var launchAtLogin: Bool = false
     var hotkey: HotKeySpec = .default
+
+    init(columns: Int = 5, rows: Int = 5, iconSize: IconSize = .medium,
+         launchClosesPanel: Bool = true, showRunningDot: Bool = true,
+         launchAtLogin: Bool = false, hotkey: HotKeySpec = .default) {
+        self.columns = columns
+        self.rows = rows
+        self.iconSize = iconSize
+        self.launchClosesPanel = launchClosesPanel
+        self.showRunningDot = showRunningDot
+        self.launchAtLogin = launchAtLogin
+        self.hotkey = hotkey
+    }
+
+    // 兼容旧 layout.json：缺新字段（如 rows）取默认值，避免整份解码失败
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        columns = try c.decodeIfPresent(Int.self, forKey: .columns) ?? 5
+        rows = try c.decodeIfPresent(Int.self, forKey: .rows) ?? 5
+        iconSize = try c.decodeIfPresent(IconSize.self, forKey: .iconSize) ?? .medium
+        launchClosesPanel = try c.decodeIfPresent(Bool.self, forKey: .launchClosesPanel) ?? true
+        showRunningDot = try c.decodeIfPresent(Bool.self, forKey: .showRunningDot) ?? true
+        launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
+        hotkey = try c.decodeIfPresent(HotKeySpec.self, forKey: .hotkey) ?? .default
+    }
 }
 
 /// 持久化文件根结构（~/Library/Application Support/MenuHome/layout.json）
@@ -133,20 +158,20 @@ struct GridMetrics: Equatable {
     var vGap: CGFloat = 14
     var hPad: CGFloat = 20
     var topPad: CGFloat = 16
-    var dotsHeight: CGFloat = 30
+    var dotsHeight: CGFloat = 0
 
     /// 单页（整面板）宽度
     var pageW: CGFloat { hPad * 2 + CGFloat(columns) * cellW + CGFloat(columns - 1) * hGap }
     var gridH: CGFloat { CGFloat(rows) * (cellH + vGap) - vGap }
-    var panelH: CGFloat { topPad + gridH + 8 + dotsHeight }
+    var panelH: CGFloat { topPad + gridH + 12 }
     var capacity: Int { columns * rows }
 
-    /// 主网格：列数 4/5/6，行数固定 5，格子宽 = 图标 + 30，高 = 图标 + 32
-    static func make(columns: Int, iconSize: IconSize) -> GridMetrics {
+    /// 主网格：列数/行数 4/5/6，格子宽 = 图标 + 30，高 = 图标 + 32
+    static func make(columns: Int, rows: Int, iconSize: IconSize) -> GridMetrics {
         let icon = iconSize.iconPt
         return GridMetrics(
             columns: max(4, min(6, columns)),
-            rows: 5,
+            rows: max(4, min(6, rows)),
             cellW: icon + 30,
             cellH: icon + 32
         )
@@ -169,10 +194,10 @@ struct GridMetrics: Equatable {
         return (row, col)
     }
 
-    /// 点对应的扁平索引（含页偏移）
-    func flatIndex(at point: CGPoint, page: Int) -> Int? {
+    /// 点对应的条目索引（滚动内容坐标系）；间隙计入所属格子
+    func index(at point: CGPoint) -> Int? {
         guard let s = slot(at: point) else { return nil }
-        return page * capacity + s.row * columns + s.col
+        return s.row * columns + s.col
     }
 }
 
@@ -180,7 +205,7 @@ struct GridMetrics: Equatable {
 
 /// 「添加 App」的目标位置
 enum AddTarget: Equatable {
-    case desktopPage(Int)
+    case desktop
     case folder(UUID)
 }
 

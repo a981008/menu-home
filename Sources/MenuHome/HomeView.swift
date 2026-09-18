@@ -22,13 +22,6 @@ struct HomeView: View {
                 .opacity(dim ? 0.45 : 1)
                 .allowsHitTesting(!dim)
 
-            // 页点浮在底部
-            VStack {
-                Spacer()
-                PageDotsView()
-                    .padding(.bottom, 8)
-            }
-
             // 空状态引导（首次启动 / 桌面被清空）
             if store.isEmpty {
                 EmptyStateView()
@@ -61,8 +54,7 @@ struct HomeView: View {
         .scaleEffect(store.panelVisible ? 1 : 0.7, anchor: store.panelAnchor)
         .opacity(store.panelVisible ? 1 : 0)
         .animation(.spring(response: 0.32, dampingFraction: 0.82), value: store.panelVisible)
-        // 面板坐标系：格子拖拽手势与拖影均以此为基准
-        .coordinateSpace(name: "homePanel")
+        // 面板坐标系由 GridCarousel 的滚动内容注册（"homePanel"）
         .animation(.easeInOut(duration: 0.2), value: dim)
         // Finder 拖入 .app 悬停高亮（面板描边）
         .overlay(

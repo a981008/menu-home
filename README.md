@@ -29,12 +29,12 @@ bash scripts/build_app.sh debug
 ## 功能清单
 
 - 状态栏图标与面板：点击开/关面板，点击面板外自动收起（non-activating，不打断当前 App）
-- 多页桌面网格：4 / 5 / 6 列可选，图标小 / 中 / 大三档，更改列数会同时调整面板尺寸
-- 文件夹：长按图标进入编辑后拖拽合并创建（或右键 App「移入新文件夹」/ 空白处「新建文件夹」），展开、重命名、移除（内容自动退回桌面）
-- 拖拽：**随时**拖动图标排序（不必先进编辑模式），拖到图标上悬停片刻合并建文件夹、拖到面板边缘自动翻页；从 Finder 拖入 .app 即添加到当前页
+- 滚动桌面网格：4 / 5 / 6 列、4 / 5 / 6 行可选，图标小 / 中 / 大三档，更改列数/行数会同时调整面板尺寸；内容超出可视区直接滚动（不分页）
+- 文件夹：拖拽合并创建（或右键 App「移入新文件夹」/ 空白处「新建文件夹」），展开、重命名、移除（内容自动退回桌面）
+- 拖拽：**随时**拖动图标排序（不必先进编辑模式），拖到图标上悬停片刻合并建文件夹；从 Finder 拖入 .app 即添加到桌面末尾
 - 编辑模式（抖动）：长按图标或右键「整理桌面…」进入，纯视觉提示
 - 键盘直入搜索覆盖层：面板打开时按任意字符直接进入搜索
-- 添加 App：扫描本机应用列表加入桌面，可加入指定页或文件夹
+- 添加 App：扫描本机应用列表加入桌面，可加入文件夹
 - 运行中 App 圆点指示（可在设置中关闭）
 - 全局热键 ⌥⌘H 随时呼出（可在设置中录制）
 - JSON 持久化：`~/Library/Application Support/MenuHome/layout.json`
@@ -46,7 +46,6 @@ bash scripts/build_app.sh debug
 |------|------|
 | ⌥⌘H | 呼出 / 收起面板（可在设置中录制） |
 | 任意字符 / ⌘F | 打开搜索覆盖层 |
-| ⌘← / ⌘→ | 翻页 |
 | Esc | 逐级回退：搜索 → 文件夹 → 编辑模式 → 关面板 |
 | ⌘, | 打开设置 |
 
@@ -57,7 +56,7 @@ bash scripts/build_app.sh debug
 | 文件 | 说明 |
 |------|------|
 | Models.swift | 数据模型：AppEntry / FolderEntry / HomeItem / IconSize / HotKeySpec / AppSettings / LayoutFile / GridMetrics / DragSession |
-| HomeStore.swift | 全局状态中枢：布局分页、设置、拖拽会话、JSON 持久化 |
+| HomeStore.swift | 全局状态中枢：桌面布局（单列表）、设置、拖拽会话、JSON 持久化 |
 | main.swift | 程序入口 |
 | AppDelegate.swift | NSApplication 生命周期与各组件接线 |
 | PanelController.swift | NSPanel 面板控制（non-activating、外部点击收起、随设置 resize） |
@@ -72,6 +71,6 @@ bash scripts/build_app.sh debug
 ## 已知限制
 
 - 启动目标 App 时面板总会因失焦而收起，即使关闭「启动 App 后自动收起面板」也是如此（激活目标 App 必然让面板失去焦点）
-- 文件夹卡片内容多时在卡片内垂直滚动，而不是分页
-- 不支持从 Finder 拖入 .app（v2 计划）
+- 文件夹卡片内容多于 9 个时在卡片内 3×3 分页（iPhone 同款）
+- 拖拽过程中桌面不会自动滚动，超出可视区域的格子需先滚动到位再拖放
 - 「登录时启动」依赖 SMAppService，需要 MenuHome.app 位于磁盘固定路径；移动位置后需重新开关一次该开关

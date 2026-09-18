@@ -142,6 +142,17 @@ struct SettingsView: View {
                     .frame(width: 150)
                 }
                 HStack {
+                    Text("行数")
+                    Spacer()
+                    Picker("", selection: rowsBinding) {
+                        Text("4").tag(4)
+                        Text("5").tag(5)
+                        Text("6").tag(6)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 150)
+                }
+                HStack {
                     Text("图标大小")
                     Spacer()
                     Picker("", selection: iconSizeBinding) {
@@ -152,7 +163,7 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                     .frame(width: 150)
                 }
-                Text("更改列数会同时调整面板尺寸。")
+                Text("更改列数/行数会同时调整面板尺寸；超出可视区域的 App 可滚动查看。")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }
@@ -200,6 +211,10 @@ struct SettingsView: View {
 
     private var columnsBinding: Binding<Int> {
         Binding(get: { store.settings.columns }, set: { store.settings.columns = $0 })
+    }
+
+    private var rowsBinding: Binding<Int> {
+        Binding(get: { store.settings.rows }, set: { store.settings.rows = $0 })
     }
 
     private var iconSizeBinding: Binding<IconSize> {

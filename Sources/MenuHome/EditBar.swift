@@ -13,7 +13,7 @@ struct EditBar: View {
                 .foregroundStyle(.secondary)
             Spacer()
             Button("＋ 添加") {
-                store.addTarget = .desktopPage(store.page)
+                store.addTarget = .desktop
             }
             .glassButton()
             Button("✓ 完成") {

@@ -3,15 +3,9 @@ import SwiftUI
 /// 单页网格：空白处右键菜单 + 按栅格坐标摆放格子（.position 定位到格子中心）
 struct PageGrid: View {
 
-    var pageIndex: Int
     var metrics: GridMetrics
 
     @EnvironmentObject var store: HomeStore
-
-    /// 本页条目（页索引越界时返回空，避免翻页动画中崩溃）
-    private var items: [HomeItem] {
-        pageIndex < store.pages.count ? store.pages[pageIndex] : []
-    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -28,11 +22,16 @@ struct PageGrid: View {
         }
     }
 
+    /// 桌面条目（单列表）
+    private var items: [HomeItem] {
+        store.pages.first ?? []
+    }
+
     // MARK: - 桌面空白处右键菜单
 
     @ViewBuilder
     private var blankMenu: some View {
-        Button("添加 App…") { store.addTarget = .desktopPage(store.page) }
+        Button("添加 App…") { store.addTarget = .desktop }
         Button("新建文件夹") { store.newFolder() }
         Divider()
         Button("整理桌面…") { store.editMode = true }

@@ -14,9 +14,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     private let panel: KeyablePanel
     private var lastIconFrame: NSRect = .zero
 
-    private var scrollAccum: CGFloat = 0
     private var keyMonitor: Any?
-    private var scrollMonitor: Any?
 
     init(store: HomeStore) {
         self.store = store
@@ -44,7 +42,6 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     deinit {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
-        if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor) }
     }
 
     // MARK: - 显隐与定位（控制中心式弹出动画）
@@ -134,25 +131,7 @@ final class PanelController: NSObject, NSWindowDelegate {
                 return self.handleKey(event) ?? event
             }
         }
-        scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
-            guard let self else { return event }
-            return MainActor.assumeIsolated {
-                guard self.panel.isVisible, NSApp.keyWindow === self.panel else { return event }
-                guard !self.store.searchActive,
-                      self.store.addTarget == nil,
-                      self.store.expandedFolderID == nil else { return event }
-                if !event.momentumPhase.isEmpty { return event }
-                self.scrollAccum += event.scrollingDeltaX + event.scrollingDeltaY
-                if self.scrollAccum >= 25 {
-                    self.scrollAccum = 0
-                    self.store.changePage(by: -1)
-                } else if self.scrollAccum <= -25 {
-                    self.scrollAccum = 0
-                    self.store.changePage(by: 1)
-                }
-                return event
-            }
-        }
+        // 滚轮：桌面为原生滚动网格（不再分页），交给 ScrollView 自行处理
     }
 
     /// 返回 nil 表示吞掉该按键
@@ -190,16 +169,6 @@ final class PanelController: NSObject, NSWindowDelegate {
                 return nil
             }
             return event
-        }
-
-        // ⌘← / ⌘→ 翻页
-        if mods.contains(.command), event.keyCode == 123 {
-            store.changePage(by: -1)
-            return nil
-        }
-        if mods.contains(.command), event.keyCode == 124 {
-            store.changePage(by: 1)
-            return nil
         }
 
         // ⌘, 打开设置

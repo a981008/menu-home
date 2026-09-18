@@ -79,7 +79,7 @@ struct SearchOverlay: View {
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                     Button("添加 App…") {
-                        store.addTarget = .desktopPage(store.page)
+                        store.addTarget = .desktop
                         store.closeSearch()
                     }
                     .glassButton()
