@@ -89,7 +89,7 @@ struct HomeView: View {
             Text("找不到「\(store.launchFailure?.name ?? "")」，它可能已被删除或移动。是否从桌面移除？")
         }
         // 接收 Finder 拖入的 .app：加入当前页末尾
-        .onDrop(of: [.fileURL], isTargeted: { store.dropTargeted = $0 }) { providers in
+        .onDrop(of: [.fileURL], isTargeted: $store.dropTargeted) { providers in
             guard let provider = providers.first else { return false }
             _ = provider.loadObject(ofClass: URL.self) { url, _ in
                 guard let url else { return }
