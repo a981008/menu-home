@@ -42,7 +42,7 @@ private struct AppScrollbar: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .scrollIndicators(.hidden)
+            .scrollIndicators(.never)
             .onScrollGeometryChange(for: ScrollInfo.self) { geo in
                 ScrollInfo(
                     offset: geo.contentOffset.y + geo.contentInsets.top,

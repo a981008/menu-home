@@ -121,7 +121,7 @@ docs/ui-design.md                     UI 设计文档（v1.0）
 - `NSDictionary` 遍历 key 是 Any：用 `for case let (key as String, sub as [String: Any]) in table`
 - 系统 App 本地化名：先按候选语言读 `InfoPlist.loctable`/`.strings`；`Bundle.localizedInfoDictionary` 只作兜底（它对无中文 strings 的系统 App 会回退英文）；loctable 查路径**不能**带 `forLocalization:`
 - 文件夹卡片内拖拽坐标在卡片空间（"folderCard"），格子换算需加滚动偏移 `scrollOffset`（onScrollGeometryChange 跟踪）
-- 玻璃容器（面板/卡片/浮层）内的 ScrollView 必须 `.clipShape` 对齐容器圆角（`Theme.scrollClipRadius` 或容器圆角），否则滚动内容/滚轴溢出圆角出现直角外露；滚轴一律 `.appScrollbar()`（自定义胶囊：右缘间距 8pt、轨道上下内收 12pt —— 28 圆角在拇指 x 处深切约 8.4pt，内收保证拇指全程不被裁），系统指示器观感不像 App 且本 SDK 无 `scrollIndicatorInsets`
+- 玻璃容器（面板/卡片/浮层）内的 ScrollView 必须 `.clipShape` 对齐容器圆角（`Theme.scrollClipRadius` 或容器圆角），否则滚动内容/滚轴溢出圆角出现直角外露；滚轴一律 `.appScrollbar()`（自定义胶囊：右缘间距 8pt、轨道上下内收 12pt —— 28 圆角在拇指 x 处深切约 8.4pt，内收保证拇指全程不被裁）；禁用系统滚轴必须用 `.scrollIndicators(.never)`（`showsIndicators: false` 与 `.hidden` 在 macOS 26 玻璃滚轴下压不住，会和自定义胶囊叠成两条）；本 SDK 无 `scrollIndicatorInsets`
 - `glassEffect` 形状必须用显式 `RoundedRectangle(cornerRadius:style: .continuous)`（`.rect(cornerRadius:)` 在玻璃合成下圆角可能不完整）
 - `NSEvent.momentumPhase` 是 OptionSet：判空用 `!event.momentumPhase.isEmpty`（没有 `.zero`）
 - 终端无屏幕录制权限（TCC），`screencapture` 截不了屏 —— 验证视觉改动靠构建 + 用户确认
