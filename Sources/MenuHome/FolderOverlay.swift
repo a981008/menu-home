@@ -59,7 +59,7 @@ struct FolderOverlay: View {
         .frame(height: 44)
     }
 
-    // MARK: - 内容网格
+    // MARK: - 内容网格（iPhone 式：固定 3×3 一页，图标从左上角排起，>9 个翻页）
 
     @ViewBuilder
     private func itemArea(folder: FolderEntry) -> some View {
@@ -76,20 +76,89 @@ struct FolderOverlay: View {
             .padding(.vertical, 28)
             .padding(.bottom, 10)
         } else {
-            ScrollView(.vertical) {
-                LazyVGrid(
-                    columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4),
-                    spacing: 12
-                ) {
-                    ForEach(folder.items) { item in
-                        FolderItemCell(item: item, folderID: folder.id)
+            FolderPagedGrid(items: folder.items, folderID: folder.id)
+        }
+    }
+}
+
+// MARK: - 文件夹卡片分页网格
+
+/// iPhone 同款：卡片固定 3 列 × 3 行，App 从左上角排起；
+/// 超过 9 个分页（横滑或点页点），卡片高度恒定、内容永远完整显示
+private struct FolderPagedGrid: View {
+    let items: [HomeItem]
+    let folderID: UUID
+    @EnvironmentObject var store: HomeStore
+
+    private let cols = 3
+    private let rowsPerPage = 3
+    private let cellH: CGFloat = 80
+    private let cardInnerWidth: CGFloat = 374 - 28   // 卡片左右各 14pt 内边距
+
+    private var perPage: Int { cols * rowsPerPage }
+    private var pageCount: Int { max(1, (items.count + perPage - 1) / perPage) }
+    private var page: Int { min(max(store.folderPage, 0), pageCount - 1) }
+    private var pageHeight: CGFloat {
+        CGFloat(rowsPerPage) * cellH + CGFloat(rowsPerPage - 1) * 10
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                HStack(spacing: 0) {
+                    ForEach(0..<pageCount, id: \.self) { p in
+                        pageGrid(p)
+                            .frame(width: cardInnerWidth, height: pageHeight, alignment: .top)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 14)
+                .offset(x: -CGFloat(page) * cardInnerWidth)
+                .animation(.spring(response: 0.3, dampingFraction: 0.85), value: page)
+                .contentShape(Rectangle())
+                .gesture(swipeGesture)
             }
-            .frame(maxHeight: folder.items.count > 12 ? 320 : .infinity)
+            .frame(width: cardInnerWidth, height: pageHeight, alignment: .top)
+            .clipped()
+
+            if pageCount > 1 {
+                HStack(spacing: 6) {
+                    ForEach(0..<pageCount, id: \.self) { i in
+                        Circle()
+                            .fill(i == page ? Color.primary.opacity(0.55) : Color.primary.opacity(0.18))
+                            .frame(width: 6, height: 6)
+                            .contentShape(Circle())
+                            .onTapGesture { withAnimation { store.folderPage = i } }
+                    }
+                }
+            }
         }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 12)
+    }
+
+    /// 一页：3×3 固定尺寸格子，从左上角排起，最后一页留白
+    private func pageGrid(_ p: Int) -> some View {
+        let slice = Array(items.dropFirst(p * perPage).prefix(perPage))
+        let cellW = (cardInnerWidth - 20) / 3
+        return LazyVGrid(
+            columns: Array(repeating: GridItem(.fixed(cellW), spacing: 10), count: cols),
+            spacing: 10
+        ) {
+            ForEach(slice) { item in
+                FolderItemCell(item: item, folderID: folderID, iconSize: 52)
+            }
+        }
+        .frame(width: cardInnerWidth, height: pageHeight, alignment: .topLeading)
+    }
+
+    private var swipeGesture: some Gesture {
+        DragGesture(minimumDistance: 25)
+            .onEnded { v in
+                if v.translation.width < -30, page < pageCount - 1 {
+                    withAnimation { store.folderPage = page + 1 }
+                } else if v.translation.width > 30, page > 0 {
+                    withAnimation { store.folderPage = page - 1 }
+                }
+            }
     }
 }
 
@@ -135,6 +204,7 @@ private struct RenameField: View {
 private struct FolderItemCell: View {
     let item: HomeItem
     let folderID: UUID
+    var iconSize: CGFloat = 48
     @EnvironmentObject var store: HomeStore
     private var _hovering: State<Bool> = State(initialValue: false)
     private var hovering: Bool {
@@ -159,7 +229,7 @@ private struct FolderItemCell: View {
             ZStack(alignment: .topLeading) {
                 Image(nsImage: NSWorkspace.shared.icon(forFile: entry.path))
                     .resizable()
-                    .frame(width: 48, height: 48)
+                    .frame(width: iconSize, height: iconSize)
 
                 if store.editMode {
                     Button {

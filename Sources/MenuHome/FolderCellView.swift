@@ -35,9 +35,11 @@ struct FolderCellView: View {
                     .font(.system(size: iconPt * 0.4, weight: .medium))
                     .foregroundStyle(.secondary)
             } else {
-                // 3×3 微缩图标（v1 文件夹内只会是 App，compactMap 兜底）
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 3),
-                          spacing: 2) {
+                // 3×3 微缩图标（最多前 9 个）：固定尺寸小格、从左上角排起（iPhone 同款）
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.fixed(iconPt * 0.28), spacing: 2), count: 3),
+                    spacing: 2
+                ) {
                     ForEach(folder.items.compactMap { $0.appEntry }.prefix(9)) { mini in
                         Image(nsImage: NSWorkspace.shared.icon(forFile: mini.path))
                             .resizable()
@@ -45,6 +47,7 @@ struct FolderCellView: View {
                     }
                 }
                 .padding(iconPt * 0.08)
+                .frame(width: iconPt, height: iconPt, alignment: .topLeading)
             }
         }
         .frame(width: iconPt, height: iconPt)

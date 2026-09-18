@@ -35,6 +35,8 @@ final class HomeStore: ObservableObject {
     // 文件夹展开覆盖层
     @Published var expandedFolderID: UUID?
     @Published var renamingFolderID: UUID?
+    /// 文件夹卡片的分页页码（iPhone 式 3×3，>9 个时分页）
+    @Published var folderPage = 0
 
     // 搜索覆盖层
     @Published var searchActive = false
@@ -370,6 +372,7 @@ final class HomeStore: ObservableObject {
     func expandFolder(_ id: UUID) {
         withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
             expandedFolderID = id
+            folderPage = 0
         }
     }
 
