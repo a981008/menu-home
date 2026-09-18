@@ -168,6 +168,8 @@ private struct FolderScrollGrid: View {
                 .frame(width: cardInnerWidth, alignment: .topLeading)
             }
             .frame(width: cardInnerWidth, height: visibleHeight)
+            // 滚动内容与滚轴裁剪进圆角容器（App 式滚轴，圆角外不露直角）
+            .clipShape(RoundedRectangle(cornerRadius: Theme.scrollClipRadius, style: .continuous))
             .onScrollGeometryChange(for: CGFloat.self) { geo in
                 geo.contentOffset.y + geo.contentInsets.top
             } action: { _, newValue in

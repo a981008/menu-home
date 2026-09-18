@@ -29,5 +29,7 @@ struct GridCarousel: View {
             .frame(width: metrics.pageW, height: contentHeight, alignment: .topLeading)
             .coordinateSpace(name: "homePanel")
         }
+        // 滚动内容与滚轴都裁剪进面板圆角内（App 式滚轴，圆角外不露直角）
+        .clipShape(RoundedRectangle(cornerRadius: Theme.panelRadius, style: .continuous))
     }
 }
