@@ -18,6 +18,9 @@ bash scripts/build_app.sh && open build/MenuHome.app
 
 # debug 构建（不做签名打包）
 bash scripts/build_app.sh debug
+
+# 打 DMG 分发包（build/MenuHome-<版本>.dmg：App + Applications 快捷方式，拖入即装）
+bash scripts/make_dmg.sh
 ```
 
 脚本用 `swiftc` 把 `Sources/MenuHome/*.swift` 直接编译为通用可执行文件再组装 .app，不经过 SwiftPM。

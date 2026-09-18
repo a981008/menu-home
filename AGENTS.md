@@ -51,7 +51,8 @@ private var hovering: Bool {
 ## 3. 常用命令
 
 ```bash
-./scripts/build_app.sh                        # 编译 + 组装 build/MenuHome.app（约 1–2 分钟）
+./scripts/build_app.sh                        # 编译 + 组装 build/MenuHome.app（约 1–2 分钟，默认 release）
+./scripts/make_dmg.sh                         # release 构建 + 打 DMG 分发包（build/MenuHome-<版本>.dmg）
 pkill -x MenuHome; sleep 1; open build/MenuHome.app   # 重启到新版
 pgrep -x MenuHome                             # 确认在跑
 ```
@@ -91,7 +92,8 @@ Sources/MenuHome/
 ├── RunningMonitor                    NSWorkspace 运行中监听（圆点）
 ├── SettingsView / SettingsWindowController
 └── Theme                             圆角体系 + liquidGlass 修饰符（唯一玻璃入口）
-scripts/build_app.sh                  唯一构建入口
+scripts/build_app.sh                  唯一构建入口（release/debug）
+scripts/make_dmg.sh                   DMG 分发包（App + Applications 快捷方式，UDZO 压缩 + 校验）
 docs/ui-design.md                     UI 设计文档（v1.0）
 ```
 
