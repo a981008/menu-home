@@ -74,7 +74,7 @@ GIT_SSH_COMMAND="ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new" git p
 ```
 Sources/MenuHome/
 ├── main.swift / AppDelegate          入口；LSUIElement 无 Dock 图标
-├── StatusIcon / HotKeyCenter         菜单栏图标（左键 toggle/右键菜单）；Carbon 全局热键 ⌥⌘H
+├── StatusIcon / HotKeyCenter         菜单栏迷你 App 图标（程序化绘制：渐变圆角底+白房子，左键 toggle/右键菜单）；Carbon 全局热键 ⌥⌘H
 ├── PanelController                   NSPanel（borderless + nonactivating + canBecomeKey）：
 │                                     开合动画时序、位置钳制、键盘监听、失焦关闭
 ├── HomeStore ★                       唯一状态源（@MainActor ObservableObject）：
@@ -84,7 +84,7 @@ Sources/MenuHome/
 ├── GridCarousel / PageGrid           滚动容器（单页、注册 "homePanel" 内容坐标系）/ 单页栅格（.position 按 cellOrigin 摆放）
 ├── CellView / AppCellView / FolderCellView   格子（拖拽手势在 CellView）；App 格；文件夹格
 ├── FolderOverlay                     文件夹卡片：3×3 分页网格 + 卡片内拖拽 + 行内重命名
-├── SearchOverlay / AddAppOverlay     搜索 / 添加 App 覆盖层
+├── SearchOverlay / AddAppOverlay     搜索 / 添加 App 覆盖层（同构：顶栏+Divider+行列表；搜索空查询=全量列表）
 ├── EditBar / EmptyStateView / DragGhostView / JiggleModifier
 ├── AppScanner                        递归扫 4 目录（两层）+ 系统 App 本地化名（loctable/strings）
 ├── RunningMonitor                    NSWorkspace 运行中监听（圆点）
@@ -98,7 +98,7 @@ docs/ui-design.md                     UI 设计文档（v1.0）
 
 1. **HomeStore 是唯一状态源**：跨视图状态一律 `@EnvironmentObject var store`；不要自建单例。
 2. **布局一律 metrics 驱动，禁止硬编码尺寸**：`GridMetrics`（cellW = 图标+30，cellH = 图标+32，hGap 12，vGap 14，hPad 20，topPad 16；图标 40/48/56 跟随 `IconSize` 设置；列数/行数 4/5/6 跟随 `settings.columns/rows`）。桌面是**单列表**（`store.pages == [items]`），超出可视行数由 GridCarousel 的 ScrollView 滚动 —— 别再引入分页。文件夹卡片、图标缩略图、拖影都已与主网格等比例 —— 调整尺寸只改 `GridMetrics.make` / `IconSize.iconPt`，别在视图里写死数字。
-3. **玻璃统一走 `Theme.liquidGlass`**：内部为 `glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius:, style: .continuous))`。圆角常量集中在 `Theme`（面板 28 / 卡片 26 / 浮层 24 / 搜索 22 / 胶囊 21 / 拖影 16）。
+3. **玻璃统一走 `Theme.liquidGlass`**：内部为 `glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius:, style: .continuous))`。圆角常量集中在 `Theme`（面板 28 / 卡片 26 / 浮层 24 / 胶囊 21 / 搜索栏 15 / 拖影 16）。
 4. **拖拽是「提起」模型**（消除「图标来回移动」的关键，别改回 live-move）：
    - `beginDrag` 把图标从网格移出（其余立即补位）→ 只有拖影跟随光标
    - `dragMoved` 只更新 currentIndex + 合并候选（占用者稳定不动）

@@ -42,7 +42,6 @@ final class HomeStore: ObservableObject {
 
     // 搜索覆盖层
     @Published var searchActive = false
-    @Published var searchQuery = ""
     /// 打开搜索层时带入的初始字符（键盘直入）
     @Published var searchSeedText = ""
 
@@ -202,12 +201,6 @@ final class HomeStore: ObservableObject {
         }
     }
 
-    func searchResults() -> [HomeItem] {
-        let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty else { return [] }
-        return flatItems.filter { $0.displayName.localizedCaseInsensitiveContains(q) }
-    }
-
     // MARK: - 搜索覆盖层
 
     func openSearch(seed: String) {
@@ -215,14 +208,12 @@ final class HomeStore: ObservableObject {
         withAnimation(.easeOut(duration: 0.18)) {
             searchActive = true
             searchSeedText = seed
-            searchQuery = seed
         }
     }
 
     func closeSearch() {
         withAnimation(.easeIn(duration: 0.15)) {
             searchActive = false
-            searchQuery = ""
             searchSeedText = ""
         }
     }

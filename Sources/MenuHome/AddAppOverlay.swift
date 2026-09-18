@@ -90,9 +90,9 @@ struct AddAppOverlay: View {
             }
         }
         .task {
-            // 打开覆盖层时扫描一次本机 App（复用已有结果则不重扫）
+            // 打开覆盖层时取本机 App 列表（带缓存，首次扫描后不重扫）
             if apps.isEmpty {
-                apps = AppScanner.scanApps()
+                apps = AppScanner.cachedApps()
             }
         }
     }

@@ -36,6 +36,16 @@ enum AppScanner {
         return img
     }
 
+    private static var appsCache: [AppEntry]?
+
+    /// 全量 App 列表（带缓存）：搜索覆盖层每次打开都要用，首次扫描后复用，不再重复走盘
+    static func cachedApps() -> [AppEntry] {
+        if let appsCache { return appsCache }
+        let list = scanApps()
+        appsCache = list
+        return list
+    }
+
     /// 从路径构造 AppEntry（Finder 拖入 .app 用）；非 .app 或无 bundle id 返回 nil
     static func entry(atPath path: String) -> AppEntry? {
         guard path.hasSuffix(".app"),
