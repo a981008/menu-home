@@ -6,8 +6,8 @@
 
 ## 技术栈
 
-- SwiftUI + AppKit（NSStatusItem / NSPanel / NSVisualEffectView / Carbon 热键）
-- 零第三方依赖；Swift 5 语言模式，部署目标 macOS 13+
+- SwiftUI + AppKit（NSStatusItem / NSPanel / 系统液态玻璃 glassEffect / Carbon 热键）
+- 零第三方依赖；Swift 5 语言模式，部署目标 **macOS 26+**（美术：macOS 27 Tahoe 液态玻璃 + 大圆角）
 - 构建：`swiftc` 直接编译（`Package.swift` 保留供 Xcode/SwiftPM 使用）
 
 ## 构建与运行

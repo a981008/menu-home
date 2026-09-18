@@ -16,10 +16,10 @@ APP="build/MenuHome.app"
 echo "==> [1/3] swiftc 编译（$MODE）"
 mkdir -p .build
 if [[ "$MODE" == "debug" ]]; then
-  xcrun swiftc -swift-version 5 -target arm64-apple-macos13.0 \
+  xcrun swiftc -swift-version 5 -target arm64-apple-macos26.0 \
     Sources/MenuHome/*.swift -o "$BIN"
 else
-  xcrun swiftc -swift-version 5 -target arm64-apple-macos13.0 -O \
+  xcrun swiftc -swift-version 5 -target arm64-apple-macos26.0 -O \
     Sources/MenuHome/*.swift -o "$BIN"
 fi
 
@@ -53,7 +53,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>13.0</string>
+	<string>26.0</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHighResolutionCapable</key>

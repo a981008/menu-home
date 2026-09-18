@@ -15,18 +15,21 @@ struct EditBar: View {
             Button("＋ 添加") {
                 store.addTarget = .desktopPage(store.page)
             }
+            .glassButton()
             Button("✓ 完成") {
                 withAnimation {
                     store.editMode = false
                 }
             }
+            .glassButton()
         }
         .padding(.horizontal, 16)
-        .frame(height: 36)
-        .frame(maxWidth: .infinity)
-        // 材质只垫在 36pt 提示条背后
-        .background(.ultraThinMaterial)
+        .frame(height: 42)
+        // 液态玻璃悬浮胶囊（macOS 26+ glassEffect / 旧系统厚材质）
+        .liquidGlass(cornerRadius: Theme.pillRadius)
+        .padding(.horizontal, 14)
         // 撑满面板高度并把内容顶对齐（作为浮层由 HomeView 放入 ZStack）
         .frame(maxHeight: .infinity, alignment: .top)
+        .padding(.top, 10)
     }
 }

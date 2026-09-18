@@ -18,9 +18,9 @@ struct DragGhostView: View {
                 .foregroundStyle(.primary)
         }
         .padding(8)
-        .background(RoundedRectangle(cornerRadius: 12).fill(.ultraThinMaterial))
+        .liquidGlass(cornerRadius: Theme.ghostRadius)
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: Theme.ghostRadius)
                 .stroke(merging ? Color.primary.opacity(0.5) : .clear, lineWidth: 2)
         )
         .scaleEffect(1.1)

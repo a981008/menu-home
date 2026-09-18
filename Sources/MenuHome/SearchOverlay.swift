@@ -32,11 +32,7 @@ struct SearchOverlay: View {
             resultArea
         }
         .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.2), radius: 14, y: 8)
-        )
+        .liquidGlass(cornerRadius: Theme.sheetRadius)
     }
 
     private var searchField: some View {
@@ -86,7 +82,7 @@ struct SearchOverlay: View {
                         store.addTarget = .desktopPage(store.page)
                         store.closeSearch()
                     }
-                    .buttonStyle(.bordered)
+                    .glassButton()
                     .controlSize(.small)
                 }
                 .padding(.vertical, 14)

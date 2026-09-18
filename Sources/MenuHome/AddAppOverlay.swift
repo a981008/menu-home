@@ -38,11 +38,7 @@ struct AddAppOverlay: View {
                 }
                 list
             }
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(.thickMaterial)
-                    .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
-            )
+            .liquidGlass(cornerRadius: Theme.overlayRadius)
             .padding(1)
         }
     }
@@ -64,7 +60,7 @@ struct AddAppOverlay: View {
             Button("取消") {
                 store.addTarget = nil
             }
-            .buttonStyle(.bordered)
+            .glassButton()
             .controlSize(.small)
         }
         .padding(12)

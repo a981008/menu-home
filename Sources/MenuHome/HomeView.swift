@@ -15,9 +15,6 @@ struct HomeView: View {
 
     var body: some View {
         ZStack {
-            // 毛玻璃底
-            VisualEffectBackground()
-
             // 分页桌面网格：有覆盖层时压暗 + 模糊，且不响应点击
             GridCarousel()
                 .blur(radius: dim ? 16 : 0)
@@ -57,6 +54,8 @@ struct HomeView: View {
             }
         }
         .frame(width: metrics.pageW, height: metrics.panelH)
+        // 面板本体：液态玻璃大圆角（macOS 26+ glassEffect / 旧系统厚材质）
+        .liquidGlass(cornerRadius: Theme.panelRadius)
         // 面板坐标系：格子拖拽手势与拖影均以此为基准
         .coordinateSpace(name: "homePanel")
         .animation(.easeInOut(duration: 0.2), value: dim)

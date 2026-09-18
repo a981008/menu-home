@@ -28,11 +28,7 @@ struct FolderOverlay: View {
                 itemArea(folder: folder)
             }
             .frame(width: 374)
-            .background(
-                RoundedRectangle(cornerRadius: 21)
-                    .fill(.thickMaterial)
-                    .shadow(color: .black.opacity(0.3), radius: 16, y: 6)
-            )
+            .liquidGlass(cornerRadius: Theme.cardRadius)
             .offset(y: -12)
         }
     }
@@ -75,7 +71,7 @@ struct FolderOverlay: View {
                 Button("＋ 添加 App") {
                     store.addTarget = .folder(folder.id)
                 }
-                .buttonStyle(.bordered)
+                .glassButton()
             }
             .padding(.vertical, 28)
             .padding(.bottom, 10)
