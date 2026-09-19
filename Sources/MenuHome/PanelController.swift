@@ -6,6 +6,16 @@ final class KeyablePanel: NSPanel {
     override var canBecomeKey: Bool { true }
 }
 
+/// 面板宿主视图：玻璃区域以外（四周 shadowMargin 阴影边距）不做命中测试，
+/// 点击穿透到下层内容 —— 「点面板外收起」的有效范围与玻璃可见边界保持一致
+private final class PanelHostingView<Content: View>: NSHostingView<Content> {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let local = convert(point, from: superview)
+        let glassRect = bounds.insetBy(dx: Theme.shadowMargin, dy: Theme.shadowMargin)
+        return glassRect.contains(local) ? super.hitTest(point) : nil
+    }
+}
+
 /// 主面板控制器：弹出/定位/失焦关闭 + 面板内的键盘与滚轮处理
 @MainActor
 final class PanelController: NSObject, NSWindowDelegate {
@@ -21,7 +31,10 @@ final class PanelController: NSObject, NSWindowDelegate {
         self.store = store
         let m = store.metrics
         self.panel = KeyablePanel(
-            contentRect: NSRect(x: 0, y: 0, width: m.pageW, height: m.panelH),
+            // 窗口比可见玻璃大一圈（四周 shadowMargin 透明边距）：容纳手绘阴影外溢
+            contentRect: NSRect(x: 0, y: 0,
+                                width: m.pageW + Theme.shadowMargin * 2,
+                                height: m.panelH + Theme.shadowMargin * 2),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -30,13 +43,17 @@ final class PanelController: NSObject, NSWindowDelegate {
 
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        // 系统窗口阴影不可用：无边框玻璃窗口的阴影形状被 AppKit 按整窗矩形采样
+        // （invalidateShadow 重采样也无效），圆角外会出现直角阴影边界。
+        // 阴影改由 HomeView 的 PanelShadowBackdrop 手绘（与玻璃同形、玻璃以内镂空），
+        // 窗口四周的透明边距就是给它的外溢空间
+        panel.hasShadow = false
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         panel.isMovableByWindowBackground = false
         panel.isReleasedWhenClosed = false
         panel.delegate = self
-        panel.contentView = NSHostingView(rootView: HomeView().environmentObject(store))
+        panel.contentView = PanelHostingView(rootView: HomeView().environmentObject(store))
 
         installMonitors()
     }
@@ -61,7 +78,6 @@ final class PanelController: NSObject, NSWindowDelegate {
                 closeWork = nil
                 store.resetTransientState()
                 store.panelVisible = true
-                refreshShadow()
             } else {
                 hide()
             }
@@ -76,7 +92,6 @@ final class PanelController: NSObject, NSWindowDelegate {
             store.resetTransientState()
             store.panelVisible = false          // 首帧以缩小 + 透明状态出现
             panel.makeKeyAndOrderFront(nil)
-            refreshShadow()
             DispatchQueue.main.async { [weak self] in
                 self?.store.panelVisible = true // 下一帧向图标锚点弹开
             }
@@ -105,28 +120,16 @@ final class PanelController: NSObject, NSWindowDelegate {
         let rx = lastIconFrame == .zero
             ? 0.8
             : (lastIconFrame.midX - f.minX) / f.width
-        store.panelAnchor = UnitPoint(x: min(0.85, max(0.15, rx)), y: 0)
-    }
-
-    /// 强制 AppKit 按当前内容可见形状重算窗口阴影。
-    /// 无边框透明窗口的阴影形状会被缓存（首次采样常为整窗矩形），
-    /// 不重算就会在圆角外留下直角阴影边界 —— 「圆角外矩形溢出」的根因。
-    private func refreshShadow() {
-        panel.invalidateShadow()
-        // 首帧渲染与弹出缩放动画期间可见形状仍在变化，延迟补采样两次
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
-            MainActor.assumeIsolated { self?.panel.invalidateShadow() }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
-            MainActor.assumeIsolated { self?.panel.invalidateShadow() }
-        }
+        // y 锚在玻璃顶边（窗口顶边向内缩 shadowMargin），x 仍按整窗宽换算
+        store.panelAnchor = UnitPoint(x: min(0.85, max(0.15, rx)),
+                                      y: Theme.shadowMargin / f.height)
     }
 
     func resize(to metrics: GridMetrics) {
-        panel.setContentSize(NSSize(width: metrics.pageW, height: metrics.panelH))
+        panel.setContentSize(NSSize(width: metrics.pageW + Theme.shadowMargin * 2,
+                                    height: metrics.panelH + Theme.shadowMargin * 2))
         if panel.isVisible {
             positionPanel()
-            panel.invalidateShadow()
         }
     }
 
@@ -137,8 +140,12 @@ final class PanelController: NSObject, NSWindowDelegate {
         let h = panel.frame.height
         var x = lastIconFrame.midX - w / 2
         x = max(screen.visibleFrame.minX + 8, min(x, screen.visibleFrame.maxX - w - 8))
-        let y = lastIconFrame.minY - 6 - h
+        // 玻璃顶边 = 窗口顶边 - shadowMargin；窗口顶边锚定 visibleFrame.maxY
+        // （AppKit 定义的菜单栏下缘，即状态栏底边）。不用状态条按钮的 frame：
+        // 其高度/在菜单栏内的位置随系统样式变化，用它对齐会与状态栏之间留出空隙
+        let y = screen.visibleFrame.maxY + Theme.shadowMargin - h
         panel.setFrameOrigin(NSPoint(x: x, y: y))
+        dragDebugLog("position icon=\(lastIconFrame) visMaxY=\(screen.visibleFrame.maxY) y=\(y) h=\(h)")
     }
 
     // MARK: - 失焦自动关闭（点击面板外 = 关闭）

@@ -10,6 +10,12 @@ enum Theme {
     static let searchBarRadius: CGFloat = 15 // 常驻搜索栏胶囊（高度 30 的一半）
     static let ghostRadius: CGFloat = 16    // 拖影
     static let scrollClipRadius: CGFloat = 10 // 玻璃容器内滚动区裁剪（滚轴/内容不得溢出圆角）
+
+    // 手绘窗口阴影（系统阴影在玻璃渲染路径下按整窗矩形采样、圆角外露直角，已禁用 —— 见 PanelController）
+    static let shadowMargin: CGFloat = 40    // 窗口四周透明边距：容纳阴影外溢 + 点击穿透区
+    static let shadowBlur: CGFloat = 16      // 阴影模糊半径
+    static let shadowOffsetY: CGFloat = 8    // 阴影向下偏移
+    static let shadowOpacity: Double = 0.32  // 阴影浓度
 }
 
 /// 液态玻璃圆角背景
