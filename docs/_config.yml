@@ -1,0 +1,6 @@
+# GitHub Pages（main 分支 /docs 目录源）最小配置
+include:
+  - "*.html"
+exclude:
+  - "*.scss"
+  - "*.js"

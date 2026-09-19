@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MenuHome · 状态栏上的「个人桌面」</title>
+<meta name="description" content="常驻 macOS 状态栏的个人桌面启动器：像 iPhone 桌面一样收纳常用 App，支持文件夹分类、随时拖拽、iOS 同款整理模式、全局搜索与 Finder 拖入。SwiftUI + AppKit 液态玻璃，零第三方依赖。">
+<link rel="icon" type="image/png" href="assets/app-icon.png">
+<style>
+  :root {
+    --bg: #0b0d14;
+    --glass: rgba(255, 255, 255, 0.07);
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-strong: rgba(255, 255, 255, 0.10);
+    --text: #f2f4f8;
+    --text-2: rgba(242, 244, 248, 0.65);
+    --text-3: rgba(242, 244, 248, 0.42);
+    --accent-1: #4f8ef7;
+    --accent-2: #7c6cf6;
+    --radius: 22px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+  /* 液态光斑背景 */
+  .blob { position: fixed; border-radius: 50%; filter: blur(90px); opacity: .32; z-index: -1; pointer-events: none; }
+  .blob-1 { width: 560px; height: 560px; background: #2b4fd8; top: -180px; left: -120px; }
+  .blob-2 { width: 480px; height: 480px; background: #6a3fd8; top: 30%; right: -160px; }
+  .blob-3 { width: 520px; height: 520px; background: #1758a8; bottom: -200px; left: 30%; }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* 顶部 */
+  header {
+    position: sticky; top: 0; z-index: 10;
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    background: rgba(11, 13, 20, 0.55);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .nav { display: flex; align-items: center; gap: 12px; padding: 14px 0; }
+  .nav img { width: 30px; height: 30px; border-radius: 8px; }
+  .nav .name { font-weight: 700; font-size: 17px; letter-spacing: .2px; }
+  .nav .links { margin-left: auto; display: flex; gap: 8px; }
+  .nav .links a {
+    color: var(--text-2); text-decoration: none; font-size: 13.5px; font-weight: 500;
+    padding: 7px 14px; border-radius: 999px; transition: all .18s ease;
+  }
+  .nav .links a:hover { color: var(--text); background: var(--glass); }
+
+  /* Hero */
+  .hero { text-align: center; padding: 88px 0 56px; }
+  .hero .kicker {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--text-2);
+    border: 1px solid var(--glass-border); background: var(--glass);
+    padding: 7px 16px; border-radius: 999px; margin-bottom: 26px;
+  }
+  .hero .kicker .dot { width: 7px; height: 7px; border-radius: 50%; background: #35c759; }
+  .hero h1 {
+    font-size: clamp(38px, 6vw, 62px); font-weight: 800; line-height: 1.12;
+    letter-spacing: -0.5px; margin-bottom: 18px;
+  }
+  .hero h1 .grad {
+    background: linear-gradient(100deg, #6fb1ff, #9d8bff 55%, #d5a4ff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero p.lead { font-size: clamp(15px, 2vw, 18px); color: var(--text-2); max-width: 640px; margin: 0 auto 34px; }
+  .cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 22px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 13px 26px; border-radius: 999px; font-size: 15px; font-weight: 600;
+    text-decoration: none; transition: all .2s ease;
+  }
+  .btn-primary {
+    color: #fff;
+    background: linear-gradient(120deg, var(--accent-1), var(--accent-2));
+    box-shadow: 0 8px 28px rgba(90, 110, 245, .38);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 34px rgba(90, 110, 245, .5); }
+  .btn-glass { color: var(--text); background: var(--glass); border: 1px solid var(--glass-border); }
+  .btn-glass:hover { background: var(--glass-strong); transform: translateY(-2px); }
+  .hero .hint { font-size: 12.5px; color: var(--text-3); }
+
+  /* 主截图 */
+  .hero-shot {
+    margin: 46px auto 0; max-width: 560px;
+    border-radius: 26px; border: 1px solid rgba(255,255,255,.14);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255,255,255,.04) inset;
+    overflow: hidden;
+  }
+  .hero-shot img { display: block; width: 100%; height: auto; }
+
+  /* 区块 */
+  section { padding: 72px 0 8px; }
+  .sec-head { text-align: center; margin-bottom: 42px; }
+  .sec-head h2 { font-size: clamp(26px, 4vw, 36px); font-weight: 800; letter-spacing: -.3px; margin-bottom: 10px; }
+  .sec-head p { color: var(--text-2); font-size: 15px; }
+
+  /* 特性卡片 */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+  .card {
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: var(--radius); padding: 26px 26px 24px;
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    transition: transform .2s ease, background .2s ease;
+  }
+  .card:hover { transform: translateY(-4px); background: var(--glass-strong); }
+  .card .ico {
+    width: 46px; height: 46px; border-radius: 14px; font-size: 23px;
+    display: flex; align-items: center; justify-content: center; margin-bottom: 16px;
+    background: linear-gradient(135deg, rgba(79, 142, 247, .28), rgba(124, 108, 246, .28));
+    border: 1px solid rgba(255, 255, 255, 0.14);
+  }
+  .card h3 { font-size: 16.5px; font-weight: 700; margin-bottom: 8px; }
+  .card p { font-size: 14px; color: var(--text-2); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 26px; }
+  .chip {
+    font-size: 13px; color: var(--text-2); padding: 8px 16px; border-radius: 999px;
+    background: var(--glass); border: 1px solid var(--glass-border);
+  }
+
+  /* 展示 */
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px; }
+  .shot {
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: var(--radius); padding: 18px; text-align: center;
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  }
+  .shot img {
+    width: 100%; max-width: 400px; height: auto; border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, .4);
+  }
+  .shot figcaption { margin-top: 14px; font-size: 13.5px; color: var(--text-2); }
+  .shot figcaption b { color: var(--text); font-weight: 650; }
+
+  /* 快捷键表 */
+  table.keys {
+    width: 100%; max-width: 640px; margin: 0 auto; border-collapse: collapse;
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: var(--radius); overflow: hidden;
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  }
+  table.keys td { padding: 13px 22px; font-size: 14.5px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+  table.keys tr:first-child td { border-top: none; }
+  table.keys td:first-child { width: 38%; color: var(--text); font-weight: 600; }
+  table.keys td:last-child { color: var(--text-2); }
+  kbd {
+    font-family: inherit; font-size: 13px; padding: 3px 9px; border-radius: 7px;
+    background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.16);
+    border-bottom-width: 2px;
+  }
+
+  /* 快速开始 */
+  .code {
+    max-width: 640px; margin: 0 auto;
+    background: rgba(0, 0, 0, 0.42); border: 1px solid var(--glass-border);
+    border-radius: 16px; padding: 20px 22px; font-size: 13.5px; line-height: 1.9;
+    overflow-x: auto;
+  }
+  .code .c { color: var(--text-3); }
+  .code .p { color: #8fd0ff; }
+  .start-note { text-align: center; font-size: 13px; color: var(--text-3); margin-top: 16px; }
+
+  footer {
+    margin-top: 80px; padding: 34px 0 42px; text-align: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 13px; color: var(--text-3);
+  }
+  footer a { color: var(--text-2); text-decoration: none; }
+  footer a:hover { color: var(--text); }
+
+  @media (max-width: 640px) {
+    .hero { padding-top: 60px; }
+    .nav .links a.hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+<div class="blob blob-3"></div>
+
+<header>
+  <div class="wrap nav">
+    <img src="assets/app-icon.png" alt="MenuHome 图标">
+    <span class="name">MenuHome</span>
+    <nav class="links">
+      <a href="#features" class="hide-sm">功能</a>
+      <a href="#shots" class="hide-sm">界面</a>
+      <a href="#start" class="hide-sm">快速开始</a>
+      <a href="https://github.com/a981008/menu-home" target="_blank" rel="noopener">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- Hero -->
+  <div class="hero">
+    <span class="kicker"><span class="dot"></span>常驻状态栏 · macOS 26+ · 零第三方依赖</span>
+    <h1>把你的 macOS 状态栏<br>变成一块<span class="grad">「个人桌面」</span></h1>
+    <p class="lead">
+      像 iPhone 桌面一样收纳常用 App：玻璃面板一键呼出，图标随手拖拽排序，
+      文件夹分类管理，键盘直搜全机应用 —— 不打断当前工作流。
+    </p>
+    <div class="cta">
+      <a class="btn btn-primary" href="https://github.com/a981008/menu-home" target="_blank" rel="noopener">查看源码 ↗</a>
+      <a class="btn btn-glass" href="#start">快速开始</a>
+    </div>
+    <div class="hint">全局热键 <b>⌥⌘H</b> 随时呼出 / 收起</div>
+
+    <div class="hero-shot">
+      <img src="screenshots/home.png" alt="MenuHome 主面板：液态玻璃圆角面板 + App 图标网格 + 常驻搜索栏" loading="eager">
+    </div>
+  </div>
+
+  <!-- 功能 -->
+  <section id="features">
+    <div class="sec-head">
+      <h2>为「随手可达」而生</h2>
+      <p>每一处细节都对齐 iOS 桌面的手感</p>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="ico">🚀</div>
+        <h3>状态栏即桌面</h3>
+        <p>左键点状态栏迷你图标秒开液态玻璃面板；non-activating 设计不打断当前 App，点面板外自动收起。</p>
+      </div>
+      <div class="card">
+        <div class="ico">🗂️</div>
+        <h3>iOS 同款拖拽手感</h3>
+        <p>随时拖动排序，不必先进整理模式：拖到占用格边缘出现「空位让位」插入预览，拖到中心悬停即合并。</p>
+      </div>
+      <div class="card">
+        <div class="ico">📁</div>
+        <h3>文件夹分类</h3>
+        <p>拖到一起即建文件夹；点击从图标位置缩放展开居中卡片，行内重命名、卡片内拖动排序、超 3×3 卡片内滚动。</p>
+      </div>
+      <div class="card">
+        <div class="ico">🔍</div>
+        <h3>键盘直搜全机应用</h3>
+        <p>面板打开时敲任意字符即进入搜索，列出全部本机 App（含未上桌面的），回车即启动。</p>
+      </div>
+      <div class="card">
+        <div class="ico">🧹</div>
+        <h3>整理模式</h3>
+        <p>长按 0.5 秒 / 右键 / 拖动提起均可进入：图标抖动 + ⊖ 移除徽章，点选多选批量删除，✓ 完成即退。</p>
+      </div>
+      <div class="card">
+        <div class="ico">🫧</div>
+        <h3>液态玻璃美术</h3>
+        <p>macOS 26 glassEffect 连续曲率圆角、玻璃栏下滚动折射、自绘同形阴影与 App 式胶囊滚轴，细节全对齐系统。</p>
+      </div>
+    </div>
+    <div class="chips">
+      <span class="chip">⌥⌘H 全局热键（可录制）</span>
+      <span class="chip">Finder 拖入 .app 即添加</span>
+      <span class="chip">运行中 App 圆点</span>
+      <span class="chip">列数 / 行数 / 图标大小可调</span>
+      <span class="chip">布局导入导出</span>
+      <span class="chip">JSON 持久化</span>
+    </div>
+  </section>
+
+  <!-- 界面 -->
+  <section id="shots">
+    <div class="sec-head">
+      <h2>界面一览</h2>
+      <p>每一层都是真实的 App 截图</p>
+    </div>
+    <div class="shots">
+      <figure class="shot">
+        <img src="screenshots/folder.png" alt="文件夹卡片展开" loading="lazy">
+        <figcaption><b>文件夹卡片</b> · 点击图标缩放展开，卡片内 3 列滚动</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="screenshots/edit-mode.png" alt="整理模式" loading="lazy">
+        <figcaption><b>整理模式</b> · 图标抖动 + ⊖ 移除徽章 + 多选批量删除</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="screenshots/search.png" alt="搜索覆盖层" loading="lazy">
+        <figcaption><b>搜索覆盖层</b> · 全机 App 秒搜，点击即启动</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="screenshots/add-app.png" alt="添加 App 覆盖层" loading="lazy">
+        <figcaption><b>添加 App</b> · 已上桌面的应用一目了然</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="screenshots/settings.png" alt="设置窗口" loading="lazy">
+        <figcaption><b>设置</b> · 通用 / 外观 / 数据 / 关于</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 快捷键 -->
+  <section id="keys">
+    <div class="sec-head">
+      <h2>快捷键</h2>
+      <p>手不离键盘</p>
+    </div>
+    <table class="keys">
+      <tr><td><kbd>⌥⌘H</kbd></td><td>呼出 / 收起面板（可在设置中录制）</td></tr>
+      <tr><td><kbd>任意字符</kbd> / <kbd>⌘F</kbd></td><td>打开搜索覆盖层</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>逐级回退：搜索 → 添加 App → 重命名 → 文件夹 → 整理模式 → 关面板</td></tr>
+      <tr><td><kbd>⌘,</kbd></td><td>打开设置</td></tr>
+    </table>
+  </section>
+
+  <!-- 快速开始 -->
+  <section id="start">
+    <div class="sec-head">
+      <h2>快速开始</h2>
+      <p>要求 macOS 26+ 与 Command Line Tools，无需完整 Xcode</p>
+    </div>
+    <div class="code">
+      <span class="c"># 克隆并构建（swiftc 直编 + ad-hoc 签名，约 1–2 分钟）</span><br>
+      <span class="p">git</span> clone https://github.com/a981008/menu-home.git<br>
+      <span class="p">cd</span> menu-home<br>
+      <span class="p">bash</span> scripts/build_app.sh <span class="c">&amp;&amp;</span> open build/MenuHome.app<br><br>
+      <span class="c"># 打 DMG 分发包（可选）</span><br>
+      <span class="p">bash</span> scripts/make_dmg.sh
+    </div>
+    <p class="start-note">
+      首次运行 ad-hoc 签名的 App 若被 Gatekeeper 拦截：<br>
+      系统设置 → 隐私与安全性 → 点「仍要打开」放行即可
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>
+      MenuHome · SwiftUI + AppKit · 零第三方依赖 ·
+      <a href="https://github.com/a981008/menu-home/blob/main/docs/ui-design.md">UI 设计文档</a> ·
+      <a href="https://github.com/a981008/menu-home">GitHub</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
