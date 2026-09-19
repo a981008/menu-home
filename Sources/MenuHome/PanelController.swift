@@ -211,7 +211,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             } else if store.expandedFolderID != nil {
                 store.collapseFolder()
             } else if store.editMode {
-                store.editMode = false
+                store.exitEditMode()
             } else {
                 hide()
             }

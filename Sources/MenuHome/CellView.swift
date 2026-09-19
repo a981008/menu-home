@@ -21,6 +21,8 @@ struct CellView: View {
     private var isDragging: Bool { store.drag?.itemID == item.id }
     /// 本格是拖拽悬停合并候选（放大示意）
     private var isMergeTarget: Bool { store.drag?.mergeCandidateID == item.id }
+    /// 本格被多选（整理模式批量移除）
+    private var isSelected: Bool { store.selectedIDs.contains(item.id) }
 
     /// 稳定伪随机种子 0...1：由 item id 哈希取模而来，保证每次渲染抖动相位一致
     private var seed: Double {
@@ -37,7 +39,8 @@ struct CellView: View {
         .frame(width: metrics.cellW, height: metrics.cellH)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(hovering ? 0.06 : 0)))
         .scaleEffect(isMergeTarget ? 1.15 : (hovering && !store.editMode ? 1.04 : 1))
-        .opacity(isDragging ? 0.25 : 1)
+        .opacity(isDragging ? 0.25 : (isSelected ? 0.85 : 1))
+        .overlay(alignment: .topLeading) { editBadge }
         .onHover { hovering = $0 }
         .modifier(JiggleModifier(active: store.editMode && !isDragging,
                                  seed: seed,
@@ -48,13 +51,45 @@ struct CellView: View {
         .help(item.displayName)
         .animation(.easeInOut(duration: 0.12), value: hovering)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isMergeTarget)
+        .animation(.easeOut(duration: 0.15), value: store.editMode)
+    }
+
+    // MARK: - 整理模式角标（iOS 式）：未选中 = 红 ⊖ 移除，选中 = 蓝 ✓
+
+    /// 角标悬在图标左上角（图标距格左 15pt、距顶约 6pt，半径 8pt 内收）
+    @ViewBuilder
+    private var editBadge: some View {
+        if store.editMode, !isDragging {
+            Button {
+                if isSelected {
+                    store.toggleSelected(id: item.id)
+                } else {
+                    // 文件夹连同内容一起移出桌面（见 removeFromDesktop）
+                    store.removeFromDesktop(id: item.id)
+                }
+            } label: {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "minus.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.white, isSelected ? Color.accentColor : Color.red)
+            }
+            .buttonStyle(.plain)
+            .offset(x: 7, y: 4)
+            .transition(.scale.combined(with: .opacity))
+            .help(isSelected ? "取消选择" : "从桌面移除")
+        }
     }
 
     // MARK: - 点按
 
     /// 点击
     private func tap() {
-        if store.editMode { return }
+        // 长按进入整理模式的那次松手不算点按（suppressTapUntil 见 HomeStore）
+        if CACurrentMediaTime() < store.suppressTapUntil { return }
+        if store.editMode {
+            // 整理模式：点格子本体 = 多选切换
+            withAnimation(.easeInOut(duration: 0.15)) { store.toggleSelected(id: item.id) }
+            return
+        }
         switch item {
         case .app(let a):    store.launch(a)
         case .folder(let f): store.expandFolder(f.id, sourceRect: iconRect)

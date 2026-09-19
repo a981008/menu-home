@@ -20,7 +20,17 @@ struct AppCellView: View {
                 .font(.system(size: 11, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .foregroundStyle(.primary)
+                .foregroundStyle(.white)
+                .background(
+                    // iOS 同款「模糊垫」：同形黑字高斯模糊成暗垫，垫子随字形与文字长度走，
+                    // 浅色壁纸/玻璃上也能勾出文字轮廓
+                    Text(app.name)
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .foregroundStyle(Color.black.opacity(0.5))
+                        .blur(radius: 4)
+                )
         }
     }
 

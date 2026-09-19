@@ -11,7 +11,10 @@ struct FolderOverlay: View {
         3 * store.metrics.cellW + 2 * store.metrics.hGap + 32
     }
 
-    /// iOS 同款开合动画：从文件夹图标位置缩放展开，收起时缩回图标
+    /// iOS 同款开合动画：从文件夹图标位置缩放展开，收起时缩回图标。
+    /// 开 = 带回弹弹簧淡入；收 = 卡片**全程实体**缩回图标、最后 0.12s 才淡出
+    /// （「缩进图标」而不是「边缩边隐」——边缩边隐是生硬感主因）。
+    /// 各段 .animation() 自带时序，不依赖外层 withAnimation
     private var cardZoom: AnyTransition {
         let m = store.metrics
         let src = store.folderSourceRect
@@ -23,7 +26,13 @@ struct FolderOverlay: View {
         let ax = min(1, max(0, (src.midX - cardX) / cardWidth))
         let ay = min(1, max(0, (src.midY - cardY) / cardH))
         let s = max(0.12, min(0.5, src.width / cardWidth))
-        return .scale(scale: s, anchor: UnitPoint(x: ax, y: ay)).combined(with: .opacity)
+        let open: AnyTransition = .scale(scale: s, anchor: UnitPoint(x: ax, y: ay))
+            .animation(.spring(response: 0.52, dampingFraction: 0.8))
+            .combined(with: .opacity.animation(.spring(response: 0.52, dampingFraction: 0.8)))
+        let close: AnyTransition = .scale(scale: s, anchor: UnitPoint(x: ax, y: ay))
+            .animation(.spring(response: 0.48, dampingFraction: 0.86))
+            .combined(with: .opacity.animation(.easeIn(duration: 0.16).delay(0.34)))
+        return .asymmetric(insertion: open, removal: close)
     }
 
     var body: some View {
@@ -34,11 +43,21 @@ struct FolderOverlay: View {
         }
     }
 
+    /// 卡片内容显现（iOS 同款两段式：卡片先弹开，内容稍后淡入）—— 手工脱糖 @State
+    private var _contentShown: State<Bool> = State(initialValue: false)
+    private var contentShown: Bool {
+        get { _contentShown.wrappedValue }
+        nonmutating set { _contentShown.wrappedValue = newValue }
+    }
+
     @ViewBuilder
     private func content(folder: FolderEntry) -> some View {
         ZStack {            // 背景：点击收起
-            Color.black.opacity(0.25)
-                .ignoresSafeArea()
+            // 压暗层必须与面板玻璃同形（连续圆角矩形）：glassEffect 只裁玻璃材质、
+            // 不裁内容，整幅矩形压暗层的四个直角会从面板圆角外露出来
+            // （「点开文件夹后圆角容器四周出现直角/矩形边界」的根因）
+            RoundedRectangle(cornerRadius: Theme.panelRadius, style: .continuous)
+                .fill(Color.black.opacity(0.3))
                 .contentShape(Rectangle())
                 .onTapGesture { store.collapseFolder() }
                 .transition(.opacity)
@@ -47,10 +66,24 @@ struct FolderOverlay: View {
                 titleRow(folder: folder)
                 itemArea(folder: folder)
             }
+            // iOS 同款两段式开合：卡片缩放弹出时内容先隐着，随后从 92% 淡入；
+            // 收起时内容先淡出（转场自带时序），空玻璃卡片再实体缩回图标
+            .opacity(contentShown ? 1 : 0)
+            .scaleEffect(contentShown ? 1 : 0.92)
+            .transition(.opacity.animation(.easeIn(duration: 0.25)))
             .frame(width: cardWidth)
             .liquidGlass(cornerRadius: Theme.panelRadius)
             .transition(cardZoom)
+            .onAppear {
+                // 卡片弹出后内容再登场（错开 0.12s 的两段节奏）
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.9).delay(0.12)) {
+                    contentShown = true
+                }
+            }
         }
+        // 容器不做整体淡出（默认 opacity 会在卡片自己转场之外再叠一层「边缩边隐」，
+        // 是收起发糊/生硬的另一个来源）—— 开合节奏全部交给子视图各自的 transition
+        .transition(.identity)
     }
 
     // MARK: - 标题（点击重命名）
@@ -103,9 +136,15 @@ struct FolderOverlay: View {
 
 // MARK: - 文件夹卡片滚动网格
 
+/// 卡片网格显示条目：item = nil 表示插入空位（拖拽落点预览）
+private struct FolderDisplayEntry: Identifiable {
+    let id: String
+    let item: HomeItem?
+}
+
 /// 卡片固定 3 列 × 可视 3 行，App 从左上角排起；
 /// 超过 3×3 在卡片内垂直滚动（不再分页），卡片高度恒定；
-/// 卡片内可拖动排序，拖出卡片 = 移出文件夹回到桌面
+/// 卡片内可拖动排序（iOS 式空位让位），拖出卡片 = 移出文件夹回到桌面
 private struct FolderScrollGrid: View {
     let items: [HomeItem]
     let folderID: UUID
@@ -141,12 +180,14 @@ private struct FolderScrollGrid: View {
         get { _scrollOffset.wrappedValue }
         nonmutating set { _scrollOffset.wrappedValue = newValue }
     }
-
-    /// 拖动中：光标所在格的内容扁平索引（卡片外为 nil）
-    private var highlightOffset: Int? {
-        guard dragItem != nil, let pt = dragPoint else { return nil }
-        return localIndex(at: pt)
+    /// 插入落点（提起坐标 = 先移除被拖项再插入的索引；nil = 不撑开空位）
+    private var _gapIndex: State<Int?> = State(initialValue: nil)
+    private var gapIndex: Int? {
+        get { _gapIndex.wrappedValue }
+        nonmutating set { _gapIndex.wrappedValue = newValue }
     }
+
+    private var gapAnim: Animation { .spring(response: 0.28, dampingFraction: 0.85) }
 
     var body: some View {
         ZStack {
@@ -155,14 +196,18 @@ private struct FolderScrollGrid: View {
                     columns: Array(repeating: GridItem(.fixed(metrics.cellW), spacing: metrics.hGap), count: cols),
                     spacing: metrics.vGap
                 ) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { off, item in
-                        let isDragged = dragItem?.id == item.id
-                        FolderItemCell(item: item, folderID: folderID, iconSize: iconPt,
-                                       onDragChanged: { pt in handleDrag(itemID: item.id, pt: pt) },
-                                       onDragEnded: { pt in handleDrop(item: item, pt: pt) })
-                            .opacity(isDragged ? 0.25 : 1)
-                            .scaleEffect(highlightOffset == off && !isDragged ? 1.08 : 1)
-                            .animation(.spring(response: 0.22, dampingFraction: 0.8), value: highlightOffset)
+                    ForEach(displayItems) { entry in
+                        if let item = entry.item {
+                            let isDragged = dragItem?.id == item.id
+                            FolderItemCell(item: item, folderID: folderID, iconSize: iconPt,
+                                           onDragChanged: { pt in handleDrag(itemID: item.id, pt: pt) },
+                                           onDragEnded: { pt in handleDrop(item: item, pt: pt) })
+                                .opacity(isDragged ? 0.25 : 1)
+                        } else {
+                            // 插入空位：两侧条目让位（iOS 式落点预览）
+                            Color.clear
+                                .frame(width: metrics.cellW, height: metrics.cellH)
+                        }
                     }
                 }
                 .frame(width: cardInnerWidth, alignment: .topLeading)
@@ -190,34 +235,84 @@ private struct FolderScrollGrid: View {
         .padding(.bottom, 12)
     }
 
-    // MARK: - 卡片内拖拽
+    // MARK: - 卡片内拖拽（iOS 式：空位跟随光标 + 半格判定；卡片内无合并）
+
+    /// 显示序列：被拖项**保持原格半透明**（手势宿主必须存活 —— 别改成移出网格，
+    /// 卡片内拖拽手势挂在格子视图上，见 AGENTS.md 不变量 4），在插入点的
+    /// 显示位置放一个空占位让两侧让位。
+    /// gapIndex 存「提起坐标」落点 h，显示位置折算回含被拖项的坐标：h ≤ from ? h : h + 1
+    private var displayItems: [FolderDisplayEntry] {
+        guard dragItem != nil, let h = gapIndex,
+              let from = items.firstIndex(where: { $0.id == dragItem?.id }) else {
+            return items.map { FolderDisplayEntry(id: $0.id, item: $0) }
+        }
+        let dg = h <= from ? h : h + 1
+        var arr: [FolderDisplayEntry] = []
+        for (i, it) in items.enumerated() {
+            if i == dg { arr.append(FolderDisplayEntry(id: "gap", item: nil)) }
+            arr.append(FolderDisplayEntry(id: it.id, item: it))
+        }
+        if dg >= items.count { arr.append(FolderDisplayEntry(id: "gap", item: nil)) }
+        return arr
+    }
 
     private func handleDrag(itemID: String, pt: CGPoint) {
-        if dragItem == nil, let it = items.first(where: { $0.id == itemID }) {
+        if dragItem == nil, let it = items.first(where: { $0.id == itemID }),
+           let fi = items.firstIndex(where: { $0.id == itemID }) {
             dragItem = it
+            // 初始空位在被拖项右侧一格：半透明原格 + 其后留白 = 「已提起」的视觉
+            gapIndex = min(fi + 1, max(0, items.count - 1))
         }
         dragPoint = pt
+        updateGap(at: pt)
     }
 
     private func handleDrop(item: HomeItem, pt: CGPoint) {
-        defer { dragItem = nil; dragPoint = nil }
+        defer { dragItem = nil; dragPoint = nil; gapIndex = nil }
         guard let di = dragItem, di.id == item.id else { return }
-        if let li = localIndex(at: pt) {
-            // 卡片内：放到光标格（越过末尾由 store 钳制到末尾）
-            store.moveWithinFolder(folderID: folderID, itemID: di.id, toLocalIndex: li)
+        if isInsideCard(pt) {
+            // 空位即落点（提起坐标，与 moveWithinFolder 的「先移除后插入」语义一致）
+            let g = gapIndex ?? localIndex(at: pt) ?? 0
+            store.moveWithinFolder(folderID: folderID, itemID: di.id, toLocalIndex: g)
         } else {
             // 拖出卡片：移出文件夹，回到桌面末尾
             store.removeFromFolder(itemID: di.id, folderID: folderID)
         }
     }
 
+    /// 点是否在卡片可视区内
+    private func isInsideCard(_ pt: CGPoint) -> Bool {
+        pt.x >= 0 && pt.y >= 0 && pt.x < cardInnerWidth && pt.y < visibleHeight
+    }
+
     /// 光标 → 内容扁平格子索引；拖出卡片（可视区外）返回 nil。
     /// 手势坐标在卡片空间，内容纵向坐标 = 卡片坐标 + 滚动偏移
     private func localIndex(at pt: CGPoint) -> Int? {
-        guard pt.x >= 0, pt.y >= 0, pt.x < cardInnerWidth, pt.y < visibleHeight else { return nil }
+        guard isInsideCard(pt) else { return nil }
         let col = min(cols - 1, max(0, Int(pt.x / (metrics.cellW + metrics.hGap))))
         let row = max(0, Int((pt.y + scrollOffset) / (metrics.cellH + metrics.vGap)))
         return row * cols + col
+    }
+
+    /// 半格判定更新落点（换算成提起坐标）：左半 = 插到该格占用者前，右半 = 之后；
+    /// 光标 → 格子是纯几何映射，不随空位让位变化（无回摆）
+    private func updateGap(at pt: CGPoint) {
+        guard dragItem != nil,
+              let from = items.firstIndex(where: { $0.id == dragItem?.id }) else { return }
+        guard isInsideCard(pt) else {
+            if gapIndex != nil { withAnimation(gapAnim) { gapIndex = nil } }
+            return
+        }
+        let col = min(cols - 1, max(0, Int(pt.x / (metrics.cellW + metrics.hGap))))
+        let row = max(0, Int((pt.y + scrollOffset) / (metrics.cellH + metrics.vGap)))
+        let k = row * cols + col
+        let after = pt.x > CGFloat(col) * (metrics.cellW + metrics.hGap) + metrics.cellW / 2
+        let h = after ? (k < from ? k + 1 : k)
+                      : (k <= from ? k : k - 1)
+        let g = max(0, min(h, max(0, items.count - 1)))
+        if gapIndex != g {
+            withAnimation(gapAnim) { gapIndex = g }
+        }
     }
 
     private func ghost(for item: HomeItem) -> some View {
@@ -329,6 +424,16 @@ private struct FolderItemCell: View {
                 .font(.system(size: 11, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .foregroundStyle(.white)
+                .background(
+                    // 与桌面图标标签同款「模糊垫」（iOS 风格）
+                    Text(entry.name)
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .foregroundStyle(Color.black.opacity(0.5))
+                        .blur(radius: 4)
+                )
         }
         .padding(6)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(hovering ? 0.06 : 0)))

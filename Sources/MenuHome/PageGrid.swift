@@ -15,14 +15,14 @@ struct PageGrid: View {
                 .contextMenu { blankMenu }
                 .onTapGesture {
                     if store.editMode {
-                        withAnimation { store.editMode = false }
+                        store.exitEditMode()
                     }
                 }
 
             // 格子：按扁平索引换算行/列，用 .position 放到格子中心
             ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
                 CellView(item: item, metrics: metrics, index: idx)
-                    .position(position(of: item))
+                    .position(displayPosition(closedIndex: idx))
             }
         }
     }
@@ -47,15 +47,12 @@ struct PageGrid: View {
 
     // MARK: - 栅格定位
 
-    /// 格子中心（本页坐标系）：cellOrigin + 半格宽高
-    private func position(of item: HomeItem) -> CGPoint {
-        guard let idx = items.firstIndex(where: { $0.id == item.id }) else {
-            // 兜底：理论上不会发生（item 必来自本页）
-            let o = metrics.cellOrigin(row: 0, col: 0)
-            return CGPoint(x: o.x + metrics.cellW / 2, y: o.y + metrics.cellH / 2)
-        }
-        let row = idx / metrics.columns
-        let col = idx % metrics.columns
+    /// 格子中心（本页坐标系）。拖拽中：插入空位之后的条目整体让位一格，
+    /// 空位处留白（iOS 式落点预览，随 applyGap 弹簧动画）
+    private func displayPosition(closedIndex idx: Int) -> CGPoint {
+        let display = idx + (store.drag?.gapIndex.map { idx >= $0 ? 1 : 0 } ?? 0)
+        let row = display / metrics.columns
+        let col = display % metrics.columns
         let origin = metrics.cellOrigin(row: row, col: col)
         return CGPoint(x: origin.x + metrics.cellW / 2,
                        y: origin.y + metrics.cellH / 2)

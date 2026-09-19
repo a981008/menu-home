@@ -27,6 +27,16 @@ struct FolderCellView: View {
                 .font(.system(size: 11, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .foregroundStyle(.white)
+                .background(
+                    // 与 App 标签同款「模糊垫」（iOS 风格）
+                    Text(folder.name)
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .foregroundStyle(Color.black.opacity(0.5))
+                        .blur(radius: 4)
+                )
         }
     }
 

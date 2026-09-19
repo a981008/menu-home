@@ -204,6 +204,21 @@ struct GridMetrics: Equatable {
         guard let s = slot(at: point) else { return nil }
         return s.row * columns + s.col
     }
+
+    /// 半格判定：点在格子中心竖线的哪一侧（true = 右半 → 插到该格占用者之后）。
+    /// iOS 式插入：两半格分别对应「插到图标前 / 图标后」，实现真正的图标间落位
+    func isAfterHalf(point: CGPoint, row: Int, col: Int) -> Bool {
+        let o = cellOrigin(row: row, col: col)
+        return point.x > o.x + cellW / 2
+    }
+
+    /// 点是否落在格子中心合并区（iOS 式：中心 = 合并候选悬停区，边缘 = 插入让位区）
+    func isInMergeZone(point: CGPoint, row: Int, col: Int) -> Bool {
+        let o = cellOrigin(row: row, col: col)
+        let dx = abs(point.x - (o.x + cellW / 2))
+        let dy = abs(point.y - (o.y + cellH / 2))
+        return dx < cellW * 0.28 && dy < cellH * 0.3
+    }
 }
 
 // MARK: - 面板内交互状态
@@ -225,6 +240,9 @@ struct DragSession: Equatable {
     var point: CGPoint = .zero
     /// 悬停合并候选（悬停同一目标 0.4s 后设置）
     var mergeCandidateID: String?
+    /// iOS 式插入空位：提起后的扁平索引，该格撑开留白、其后条目让位一格
+    /// （nil = 不撑开 —— 合并悬停中 / 落点在网格下方追加区，无可见空位）
+    var gapIndex: Int?
 
     var itemID: String { item.id }
 }

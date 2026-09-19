@@ -102,22 +102,24 @@ docs/ui-design.md                     UI 设计文档（v1.0）
 ## 5. 不变量与设计约定（改代码别破坏）
 
 1. **HomeStore 是唯一状态源**：跨视图状态一律 `@EnvironmentObject var store`；不要自建单例。
-2. **布局一律 metrics 驱动，禁止硬编码尺寸**：`GridMetrics`（cellW = 图标+30，cellH = 图标+32，hGap 12，vGap 14，hPad 20，topPad 16；图标 40/48/56 跟随 `IconSize` 设置；列数/行数 4/5/6 跟随 `settings.columns/rows`）。桌面是**单列表**（`store.pages == [items]`），超出可视行数由 GridCarousel 的 ScrollView 滚动 —— 别再引入分页。`index(at:)` **只钳列数、不钳行数**（单页滚动内容行数随条目增长，按设置行数钳制会让滚动区域的拖拽落点全部失效）——落点超出已有条目 = 追加到末尾。文件夹卡片、图标缩略图、拖影都已与主网格等比例 —— 调整尺寸只改 `GridMetrics.make` / `IconSize.iconPt`，别在视图里写死数字。
+2. **布局一律 metrics 驱动，禁止硬编码尺寸**：`GridMetrics`（cellW = 图标+30，cellH = 图标+32，hGap 12，vGap 14，hPad 20，topPad 16；图标 40/48/56 跟随 `IconSize` 设置；列数/行数 4/5/6 跟随 `settings.columns/rows`）。桌面是**单列表**（`store.pages == [items]`），超出可视行数由 GridCarousel 的 ScrollView 滚动 —— 别再引入分页。`index(at:)` **只钳列数、不钳行数**（单页滚动内容行数随条目增长，按设置行数钳制会让滚动区域的拖拽落点全部失效）——落点超出已有条目 = 追加到末尾。文件夹卡片、图标缩略图、拖影都已与主网格等比例 —— 调整尺寸只改 `GridMetrics.make` / `IconSize.iconPt`，别在视图里写死数字。**滚动区全高占满面板**（iOS 同款「玻璃栏下滚动」）：常驻搜索栏是 `GridCarousel` 的顶层 `.overlay(alignment: .top)` 浮层（不是 safeAreaInset），滚动内容顶部 `.padding(.top, metrics.searchBarArea)` 让出起步区 —— padding 在 `"homePanel"` 命名坐标系**之外**，拖拽坐标仍是内容坐标；图标上滚时从液态玻璃搜索栏（编辑模式下是整理条）下穿过被折射，别把搜索栏改回 safeAreaInset（会把滚动区截短）
 3. **玻璃统一走 `Theme.liquidGlass`**：内部为 `glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius:, style: .continuous))`。圆角常量集中在 `Theme`（主要玻璃面统一 **28**：面板/文件夹卡片/搜索/添加浮层；胶囊 21 / 搜索栏 15 / 拖影 16 / 内滚区 10）。
 4. **拖拽是「提起」模型**（消除「图标来回移动」的关键，别改回 live-move）：
    - `beginDrag` 把图标从网格移出（其余立即补位）→ 只有拖影跟随光标
    - `dragMoved` 只更新 currentIndex + 合并候选（占用者稳定不动）
    - `endDrag` 插入光标格或合并；`cancelDrag` 回原位；合并 = 悬停占用者 400ms（`holdWork` 计时）
    - 合并时拖拽项**不在** items 里 → `performMerge(dragged:target:)` 直接在目标位置生成
-   - **手势流（v1.1 重构）**：桌面拖拽由 **GridCarousel 内容层的单一手势全程驱动**（`startLocation` 所在格提起 → `dragMoved` → `endDrag`），宿主在拖拽全程存活；**不要**把拖拽手势挂回格子 —— 提起即移除格子视图，手势交付不可靠。长按不再进入整理模式（唯一入口：右键「整理桌面…」；退出：✓完成 / 点面板空白处 / 面板关闭时 `resetTransientState` 复位）
+   - **手势流（v1.1 重构）**：桌面拖拽由 **GridCarousel 内容层的单一手势全程驱动**（`startLocation` 所在格提起 → `dragMoved` → `endDrag`），宿主在拖拽全程存活；**不要**把拖拽手势挂回格子 —— 提起即移除格子视图，手势交付不可靠。**进入整理模式的三个入口（v1.2，iOS 同款）**：① 拖动提起（`beginDrag` 里置 `editMode = true`）；② 长按 0.5s（GridCarousel 内容层 LongPressGesture(minimumDuration: 0.5, maximumDistance: 8) 与拖拽手势并行，空白处同样生效）；③ 右键「整理桌面…」。①② 都会设 `store.suppressTapUntil` 压制随后 0.4s 内的误触 tap（长按松手/拖完松手不当点按）—— 别删。退出：✓完成 / Esc / 点面板空白处 / 面板关闭时 `resetTransientState` 复位
+   - **落点判定（iOS 式，v1.2）**：拖动时光标在占用格**边缘区** → 半格判定插入点（`GridMetrics.isAfterHalf`，左半 = 插到占用者前、右半 = 之后），`DragSession.gapIndex` 撑开空位、其后条目让位一格（`applyGap` 仅跨格发布 + 弹簧动画；PageGrid 用 `displayPosition` 折算让位，文件夹卡片用 `FolderDisplayEntry` 空占位）；光标在**中心区**（`isInMergeZone`）→ 网格闭合、悬停 0.4s 合并（`updateMergeHold`）。桌面网格条目已被提出（gapIndex 即提起坐标）；文件夹卡片被拖项**保持原格半透明**（手势宿主必须存活），`gapIndex` 存提起坐标、显示时折算 `h ≤ from ? h : h+1`
    - **松手兜底（PanelController）**：本地 `leftMouseUp` 监视器在手势 `onEnded` 被取消/丢失时强制 `endDrag` 落位（endDrag 幂等，双保险）。没有它，丢失松手事件 = 会话永久卡死 =「能拖着走、永远放不下」；别删。拖拽管线另有临时诊断日志 `dragDebugLog`（drag-debug.log），定位完成后移除
    - **性能红线**：光标高频移动只写 `store.ghost`（独立 GhostTracker，只重渲染拖影）与非发布态 `liveIndex`；`@Published` 仅在跨格/合并态等结构变化时更新。鼠标移动事件可达数百 Hz，逐事件发布会让整棵视图树重渲染（卡顿根因）。图标读取一律用 `AppScanner.cachedIcon(forPath:)`（NSCache），别直接调 `NSWorkspace.icon(forFile:)`
 5. **拖拽坐标系**：桌面拖拽的 `"homePanel"` 由 **GridCarousel 的滚动内容**注册 —— 手势坐标随滚动一致；文件夹卡片内拖拽用 `.named("folderCard")`。
 6. **面板开合动画**：`store.panelVisible` + `store.panelAnchor`（状态栏图标在面板上的相对锚点）驱动 scale/opacity；窗口先出现、下一帧置 visible。收起 = 先收缩、0.3s 后 `orderOut` + `resetTransientState()`（`closeWork` 延迟任务；收起途中再点图标会反向弹回）。**任何让面板重新可见的路径（全新弹出 / 反向弹回）都必须先 `resetTransientState()`** —— 弹回会 cancel 掉 closeWork，其挂着的复位随之作废，不复位就会把编辑模式/拖拽会话原样带回面板（「重开后抖动残留」的根因）
-7. **文件夹开合**：`folderSourceRect`（点击时记录的图标矩形）作为动画锚点，卡片 transition 以它缩放展开/缩回；卡片在面板内**正中**（无偏移），内容超过 3×3 在卡片内滚动（`FolderScrollGrid`，拖拽格子换算要加 `scrollOffset`）。
+7. **文件夹开合**：`folderSourceRect`（点击时记录的图标矩形）作为动画锚点，卡片 transition 以它缩放展开/缩回；**两段式动画（iOS 同款，节奏放慢版）**：开 = 卡片带回弹弹出（asymmetric insertion 0.52/0.8），内容 `contentShown` 错开 0.12s 从 92% 淡入（0.45/0.9）；收 = 内容先以 `.transition(.opacity.animation(.easeIn(0.25)))` 淡出、空玻璃卡片**全程实体**缩回图标（removal 0.48/0.86）、落到图标上末段才淡出（easeIn 0.16 延迟 0.34）—— 「边缩边隐」和容器默认整体淡出都是生硬感来源，容器已 `.transition(.identity)`。转场用 `.animation()` 自带时序，不依赖外层 withAnimation（`let open/close: AnyTransition = …` 必须显式标注类型，否则隐式成员语法编译失败）。FolderOverlay 的 `contentShown` 是手工脱糖 @State。卡片在面板内**正中**（无偏移），内容超过 3×3 在卡片内滚动（`FolderScrollGrid`，拖拽格子换算要加 `scrollOffset`）。
 8. **持久化**：`~/Library/Application Support/MenuHome/layout.json`（pages + settings，文件夹有稳定 UUID）。**pages 现在恒为单元素数组**（旧多页文件在 load 时扁平迁移）；`AppSettings.init(from:)` 用 decodeIfPresent 兼容旧文件缺字段。拖拽期间落盘会被推迟（`persistPending`），拖拽结束统一补写；写盘在后台队列执行（`persistNow`），别把文件 I/O 挪回主线程。**做会改动布局的自动化测试前先备份该文件，测完还原**。
-9. **UI 文案全部简体中文**，代码注释也用中文。
+9. **UI 文案全部简体中文**，代码注释也用中文。桌面图标标签（AppCellView / FolderCellView）与文件夹卡片内标签（FolderOverlay.FolderItemCell）统一 iOS 桌面同款：白字 + **同形黑字模糊垫**（`.foregroundStyle(.white)`，`.background` 里放同字体黑字 `opacity 0.5 + blur(4)`，即 iOS「blurred pad」手法，垫子随字形与文字长度走）—— 浅色壁纸/玻璃上保证可读，别改回单层 shadow；搜索/添加浮层内标签仍用 `.primary`。
 10. 新增 `@Published` 瞬态时，确认是否要在 `resetTransientState()` 里复位（面板收起后不留脏状态）。
+11. **移除语义分两套，别混**：右键菜单 `removeItem(id:)` 对文件夹是「内容退回桌面」；整理模式 ⊖ 徽章 / 批量删除走 `removeFromDesktop(id:)` / `removeSelectedFromDesktop()`，文件夹**连同内容**一起移出桌面（App 本体不受影响，用户选定）。多选 `selectedIDs` 是瞬态，`exitEditMode()` 与 `resetTransientState()` 都要清空。
 
 ## 6. 已知坑
 

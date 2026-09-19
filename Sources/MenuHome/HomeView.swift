@@ -54,12 +54,16 @@ struct HomeView: View {
     /// 玻璃面板本体（尺寸 = 可见玻璃：pageW × panelH，在含边距的窗口内居中）
     private var panelContent: some View {
         ZStack {
-            // 滚动桌面网格：有覆盖层时压暗 + 模糊，且不响应点击；顶部常驻搜索栏（编辑模式时让位给整理条）
+            // 滚动桌面网格：有覆盖层时压暗 + 模糊，且不响应点击。
+            // 常驻搜索栏浮在网格上层（液态玻璃）：图标滚动时从栏下穿过、被玻璃折射。
+            // 压暗模糊的结果必须裁进面板同形圆角：blur 不裁剪，模糊内容会从玻璃边界
+            // 向外渗出（矩形光晕，与 ScrollView 直角外露同一类问题）
             GridCarousel()
                 .blur(radius: dim ? 16 : 0)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.panelRadius, style: .continuous))
                 .opacity(dim ? 0.45 : 1)
                 .allowsHitTesting(!dim)
-                .safeAreaInset(edge: .top) {
+                .overlay(alignment: .top) {
                     if !store.editMode {
                         ResidentSearchBar()
                             .padding(.top, 10)

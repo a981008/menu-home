@@ -23,6 +23,11 @@ final class HomeStore: ObservableObject {
 
     // 编辑模式（抖动）
     @Published var editMode = false
+    // 整理模式多选（批量移除；退出整理/收起面板即清空）
+    @Published var selectedIDs: Set<String> = []
+    /// 长按进入整理模式后短暂压制格子 tap：长按松手的那次 click 不算点按
+    /// （否则会误触启动 App / 切换多选）。非发布瞬态
+    var suppressTapUntil: CFTimeInterval = 0
 
     // 面板显隐动画（控制中心式：从状态栏图标弹出/缩回）
     @Published var panelVisible = false
@@ -138,11 +143,27 @@ final class HomeStore: ObservableObject {
     /// 关闭面板时清理面板内瞬态（由 PanelController.hide() 调用）
     func resetTransientState() {
         editMode = false
+        selectedIDs = []
         expandedFolderID = nil
         renamingFolderID = nil
         if searchActive { closeSearch() }
         addTarget = nil
         if drag != nil { cancelDrag() }
+    }
+
+    /// 退出整理模式（清掉多选残留）
+    func exitEditMode() {
+        withAnimation { editMode = false }
+        selectedIDs = []
+    }
+
+    /// 整理模式点选 / 取消多选
+    func toggleSelected(id: String) {
+        if selectedIDs.contains(id) {
+            selectedIDs.remove(id)
+        } else {
+            selectedIDs.insert(id)
+        }
     }
 
     // MARK: - 栅格（单列表，超出可视行数即滚动）
@@ -299,6 +320,25 @@ final class HomeStore: ObservableObject {
         setFlat(items)
     }
 
+    /// 整理模式移除（X 徽章 / 批量删除用）：App 删快捷方式；
+    /// 文件夹**连同内容**一起移出桌面（App 本体不受影响，可重新添加）。
+    /// 与 removeItem(id:)（右键，文件夹内容退回桌面）语义不同
+    func removeFromDesktop(id: String) {
+        guard drag == nil else { return }
+        var items = flatItems
+        items.removeAll { $0.id == id }
+        setFlat(items)
+    }
+
+    /// 整理模式批量移除选中条目（无二次确认；文件夹连同内容）
+    func removeSelectedFromDesktop() {
+        guard drag == nil, !selectedIDs.isEmpty else { return }
+        var items = flatItems
+        items.removeAll { selectedIDs.contains($0.id) }
+        setFlat(items)
+        selectedIDs = []
+    }
+
     /// 在桌面末尾新建空文件夹，并打开进入重命名
     func newFolder() {
         var items = flatItems
@@ -356,13 +396,15 @@ final class HomeStore: ObservableObject {
 
     func expandFolder(_ id: UUID, sourceRect: CGRect = .zero) {
         folderSourceRect = sourceRect
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+        // iOS 同款手感：弹簧稍带回弹，卡片从图标位置「弹」开（与 cardZoom 展开时序一致）
+        withAnimation(.spring(response: 0.52, dampingFraction: 0.8)) {
             expandedFolderID = id
         }
     }
 
     func collapseFolder() {
-        withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+        // 收起更利落（回弹小），内容淡出后卡片缩回图标（与 cardZoom 收起时序一致）
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
             expandedFolderID = nil
             renamingFolderID = nil
         }
@@ -391,6 +433,8 @@ final class HomeStore: ObservableObject {
 
     /// 诊断日志：上一个已记录的落点格（跨格才记录，避免刷屏）
     private var lastLoggedIdx: Int?
+    /// 诊断日志：上一个已发布的插入空位（变化才记录）
+    private var lastLoggedGap: Int?
 
     func beginDrag(itemID: String) {
         guard drag == nil else { return }
@@ -404,13 +448,27 @@ final class HomeStore: ObservableObject {
         setFlat(items)
         liveIndex = idx
         lastLoggedIdx = nil
-        drag = DragSession(item: item, originIndex: idx, currentIndex: idx)
+        lastLoggedGap = nil
+        // 提起即进入整理模式（iOS 同款：拖动图标 → 全桌面抖动）；
+        // 并压制 tap，防止拖完松手被当成点按（误启动/误多选）
+        suppressTapUntil = CACurrentMediaTime() + 0.4
+        if !editMode {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                editMode = true
+            }
+        }
+        // 空位初始 = 让出的原格（iOS 同款：提起后原位留白）
+        drag = DragSession(item: item, originIndex: idx, currentIndex: idx, gapIndex: idx)
         dragDebugLog("beginDrag \(item.displayName) origin=\(idx) editMode=\(editMode)")
     }
 
     /// 拖拽移动中（point 为 homePanel 坐标系）。
     /// 高频热路径：只写 ghost tracker 与非发布态；@Published 仅在结构变化（跨格/合并态）时更新，
     /// 否则每个鼠标事件都会触发整棵视图树重渲染（卡顿根因）。
+    ///
+    /// iOS 式落点：光标在占用格**中心区** → 网格闭合、悬停 0.4s 合并；
+    /// **边缘区** → 半格判定插入点、撑开空位两侧让位（跨格才发布）；
+    /// 网格下方空白 → 追加到末尾（无可见空位）；出界保持当前空位（防边缘抖动）。
     func dragMoved(to point: CGPoint, metrics: GridMetrics) {
         guard drag != nil else { return }
         // 拖影提交节流（~80fps）：高报告率鼠标（125–1000Hz）下限制拖影重渲染频率
@@ -420,25 +478,43 @@ final class HomeStore: ObservableObject {
             ghost.started = true
             lastGhostCommit = now
         }
-        // 光标所在格：拖拽项已提起，占用者稳定不动（合并目标不再漂移）；
-        // 内容坐标系随滚动一致，滚到哪拖到哪。
-        // 落点超出已有条目（网格下方空白）= 追加到末尾
-        let idx = metrics.index(at: point)
-        if let i = idx {
-            if i < flatItems.count {
-                liveIndex = i
-                updateMergeHold(targetID: flatItems[i].id)
-            } else {
+        if let s = metrics.slot(at: point) {
+            let cellIdx = s.row * metrics.columns + s.col
+            if cellIdx >= flatItems.count {
+                // 落点在已有条目之外 = 追加到末尾
+                applyGap(nil)
                 liveIndex = flatItems.count
+                cancelMergeHold()
+            } else if metrics.isInMergeZone(point: point, row: s.row, col: s.col) {
+                // 中心合并区：网格闭合，维持悬停计时
+                applyGap(nil)
+                liveIndex = cellIdx
+                updateMergeHold(targetID: flatItems[cellIdx].id)
+            } else {
+                // 边缘插入区：半格判定（左半 = 插到占用者前，右半 = 之后）
+                let g = min(cellIdx + (metrics.isAfterHalf(point: point, row: s.row, col: s.col) ? 1 : 0),
+                            flatItems.count)
+                applyGap(g)
+                liveIndex = g
                 cancelMergeHold()
             }
         } else {
+            // 出界（网格左右/上方）：保持当前空位，仅取消合并悬停
             cancelMergeHold()
         }
-        // 诊断日志：仅在跨格时记录（避免高频刷屏）
-        if idx != lastLoggedIdx {
-            lastLoggedIdx = idx
-            dragDebugLog("moved p=(\(Int(point.x)),\(Int(point.y))) idx=\(idx.map(String.init) ?? "nil") live=\(liveIndex) count=\(flatItems.count)")
+        // 诊断日志：仅在空位/落点变化时记录（避免高频刷屏）
+        if let d = drag, d.gapIndex != lastLoggedGap {
+            lastLoggedGap = d.gapIndex
+            dragDebugLog("moved p=(\(Int(point.x)),\(Int(point.y))) gap=\(d.gapIndex.map(String.init) ?? "nil") live=\(liveIndex) count=\(flatItems.count)")
+        }
+    }
+
+    /// 更新插入空位（仅在变化时发布，跨格频率；弹簧动画与增删一致）
+    private func applyGap(_ idx: Int?) {
+        guard var d = drag, d.gapIndex != idx else { return }
+        d.gapIndex = idx
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            drag = d
         }
     }
 
@@ -448,6 +524,7 @@ final class HomeStore: ObservableObject {
         holdTargetID = nil
         ghost.started = false
         lastLoggedIdx = nil
+        lastLoggedGap = nil
         guard let d = drag else {
             dragDebugLog("endDrag 时会话已空（可能已被取消）")
             return
@@ -475,6 +552,7 @@ final class HomeStore: ObservableObject {
         holdTargetID = nil
         ghost.started = false
         lastLoggedIdx = nil
+        lastLoggedGap = nil
         guard let d = drag else { return }
         drag = nil
         var items = flatItems
