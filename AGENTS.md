@@ -110,6 +110,7 @@ docs/ui-design.md                     UI 设计文档（v1.0）
    - `endDrag` 插入光标格或合并；`cancelDrag` 回原位；合并 = 悬停占用者 400ms（`holdWork` 计时）
    - 合并时拖拽项**不在** items 里 → `performMerge(dragged:target:)` 直接在目标位置生成
    - **手势流（v1.1 重构）**：桌面拖拽由 **GridCarousel 内容层的单一手势全程驱动**（`startLocation` 所在格提起 → `dragMoved` → `endDrag`），宿主在拖拽全程存活；**不要**把拖拽手势挂回格子 —— 提起即移除格子视图，手势交付不可靠。长按不再进入整理模式（唯一入口：右键「整理桌面…」；退出：✓完成 / 点面板空白处 / 面板关闭时 `resetTransientState` 复位）
+   - **松手兜底（PanelController）**：本地 `leftMouseUp` 监视器在手势 `onEnded` 被取消/丢失时强制 `endDrag` 落位（endDrag 幂等，双保险）。没有它，丢失松手事件 = 会话永久卡死 =「能拖着走、永远放不下」；别删。拖拽管线另有临时诊断日志 `dragDebugLog`（drag-debug.log），定位完成后移除
    - **性能红线**：光标高频移动只写 `store.ghost`（独立 GhostTracker，只重渲染拖影）与非发布态 `liveIndex`；`@Published` 仅在跨格/合并态等结构变化时更新。鼠标移动事件可达数百 Hz，逐事件发布会让整棵视图树重渲染（卡顿根因）。图标读取一律用 `AppScanner.cachedIcon(forPath:)`（NSCache），别直接调 `NSWorkspace.icon(forFile:)`
 5. **拖拽坐标系**：桌面拖拽的 `"homePanel"` 由 **GridCarousel 的滚动内容**注册 —— 手势坐标随滚动一致；文件夹卡片内拖拽用 `.named("folderCard")`。
 6. **面板开合动画**：`store.panelVisible` + `store.panelAnchor`（状态栏图标在面板上的相对锚点）驱动 scale/opacity；窗口先出现、下一帧置 visible。收起 = 先收缩、0.3s 后 `orderOut` + `resetTransientState()`（`closeWork` 延迟任务；收起途中再点图标会反向弹回）。**任何让面板重新可见的路径（全新弹出 / 反向弹回）都必须先 `resetTransientState()`** —— 弹回会 cancel 掉 closeWork，其挂着的复位随之作废，不复位就会把编辑模式/拖拽会话原样带回面板（「重开后抖动残留」的根因）
