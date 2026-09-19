@@ -131,7 +131,7 @@ docs/ui-design.md                     UI 设计文档（v1.0）
 - 主面板禁用系统窗口阴影（`panel.hasShadow = false`）：无边框玻璃窗口的阴影形状被 AppKit 按整窗矩形采样，`invalidateShadow()` 重采样也无效，圆角外必然出现直角阴影边界。阴影由 HomeView 的 `PanelShadowBackdrop` 手绘（与玻璃同形的圆角矩形模糊后镂空，只画玻璃外圈）；窗口四周留 `Theme.shadowMargin` 透明边距容纳外溢，`PanelHostingView.hitTest` 让边距区点击穿透（「点面板外收起」范围不变）。别把 hasShadow 改回 true
 - `NSEvent.momentumPhase` 是 OptionSet：判空用 `!event.momentumPhase.isEmpty`（没有 `.zero`）
 - 无边框窗口顶边上探进菜单栏时，`makeKeyAndOrderFront` 会经 `constrainFrameRect(_:to:)` 把顶边钳回 `visibleFrame.maxY`、整窗下推一个边距（KeyablePanel 已 override 原样返回禁用，别删）；面板与状态栏的呼吸间隙由 `Theme.statusBarGap` 控制，宿主视图安全区已清零（别恢复系统安全区）
-- 终端无屏幕录制权限（TCC），`screencapture` 截不了屏 —— 验证视觉改动靠构建 + 用户确认
+- 终端**有**屏幕录制权限：`screencapture -x` 可直接截屏自查视觉改动（多屏时每屏各存一个文件，按像素宽分辨内建/外接屏；本机 MenuHome 面板在外接屏上）。玻璃面板的干净截图：窗口矩形内缩 `Theme.shadowMargin`（40pt）= 玻璃可见区，再按 28pt 圆角蒙版裁出即得无背景纯面板图（截 UI 各状态可给 AppDelegate 临时加 `DistributedNotificationCenter` 调试钩子用命令行触发，拍完移除——注意 `notifyutil -p` 与 `NSDistributedNotificationCenter` **不**互通，要用同 API 的小工具发通知）。重要：截图裁剪若带背景边距，会泄露屏幕上其他窗口的私人内容
 
 ## 7. 验证清单（每次 UI 改动后）
 
