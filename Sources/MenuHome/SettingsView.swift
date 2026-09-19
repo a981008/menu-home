@@ -197,7 +197,9 @@ struct SettingsView: View {
     private var aboutGroup: some View {
         GroupBox(label: Text("关于")) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("MenuHome \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1")")
+                // 版本号单一来源是仓库根的 VERSION 文件（build_app.sh 注入 Info.plist）；
+                // 直跑裸二进制没有 Info.plist 时显示「开发版」
+                Text("MenuHome \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "开发版")")
                     .font(.system(size: 12, weight: .medium))
                 Text("状态栏上的个人桌面 · 布局保存在 ~/Library/Application Support/MenuHome/layout.json")
                     .font(.system(size: 10))

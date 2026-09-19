@@ -14,6 +14,9 @@ MODE="${1:-release}"   # release（默认）| debug
 BIN=".build/MenuHome"
 APP="build/MenuHome.app"
 
+# 版本号单一来源：仓库根 VERSION 文件（「关于」页与 DMG 文件名都跟随它，升级只改这一行）
+APP_VERSION="$(tr -d '[:space:]' < VERSION)"
+
 echo "==> [1/3] swiftc 编译（$MODE）"
 mkdir -p .build
 if [[ "$MODE" == "debug" ]]; then
@@ -65,6 +68,10 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
+
+# 注入版本号：CFBundleShortVersionString（对外版本）与 CFBundleVersion（构建号）都取自 VERSION
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_VERSION" "$APP/Contents/Info.plist"
 
 echo "==> [3/3] ad-hoc 签名"
 codesign --force --sign - "$APP" || true

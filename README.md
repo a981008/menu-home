@@ -16,6 +16,8 @@
 
 ## 构建与运行
 
+> 免构建直接下载：到 [Releases](https://github.com/a981008/menu-home/releases/latest) 下载 `MenuHome-<版本>.dmg`，打开拖入「应用程序」即可（arm64，macOS 26+）。
+
 ```bash
 # 打包成 .app（release 构建 + ad-hoc 签名）并运行
 bash scripts/build_app.sh && open build/MenuHome.app

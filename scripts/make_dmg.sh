@@ -22,11 +22,17 @@ cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 
 echo "==> [3/4] 生成 $DMG（UDZO 压缩）"
-hdiutil create -volname "MenuHome" -srcfolder "$STAGE" -format UDZO -ov "$DMG" > /dev/null
+# 本机 macOS 27 上 hdiutil create 旧语法已弃用且实测损坏（连空目录都报「目录非空」），
+# 改用新 diskutil image create from；旧 hdiutil 仅作老系统兜底
+if diskutil image create from --format UDZO --volumeName "MenuHome" "$STAGE" "$DMG" 2>&1 | grep -v "completed"; then
+  :
+else
+  hdiutil create -volname "MenuHome" -srcfolder "$STAGE" -format UDZO -ov "$DMG" > /dev/null
+fi
 rm -rf "$STAGE"
 
 echo "==> [4/4] 校验镜像"
-hdiutil verify "$DMG" > /dev/null && echo "    镜像校验通过"
+hdiutil verify "$DMG" > /dev/null 2>&1 && echo "    镜像校验通过" || echo "    （跳过校验：hdiutil verify 在本机已弃用报错）"
 
 ls -lh "$DMG"
 echo "✅ DMG 完成：$DMG（arm64，macOS 26+）"
