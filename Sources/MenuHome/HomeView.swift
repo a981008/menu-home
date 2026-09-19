@@ -24,6 +24,9 @@ struct HomeView: View {
         // 四周留 shadowMargin 透明边距容纳阴影外溢（窗口即此尺寸，见 PanelController）
         .frame(width: metrics.pageW + Theme.shadowMargin * 2,
                height: metrics.panelH + Theme.shadowMargin * 2)
+        // 窗口上探进菜单栏区域时系统会注入顶部安全区 inset 把内容推低（贴不上状态栏）——
+        // 双保险：宿主视图已清零安全区，这里再显式忽略
+        .ignoresSafeArea()
         // 控制中心式弹出动画：以状态栏图标为锚点缩放 + 淡入
         .scaleEffect(store.panelVisible ? 1 : 0.7, anchor: store.panelAnchor)
         .opacity(store.panelVisible ? 1 : 0)

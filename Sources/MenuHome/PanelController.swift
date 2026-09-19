@@ -4,6 +4,12 @@ import SwiftUI
 /// 可以成为 key window 的无边框面板（无边框窗口默认不能成为 key，否则收不到键盘）
 final class KeyablePanel: NSPanel {
     override var canBecomeKey: Bool { true }
+
+    /// 玻璃要贴住状态栏，窗口顶边（含阴影边距）必然上探进菜单栏区域；
+    /// AppKit 在窗口显示（makeKeyAndOrderFront 等）时机会调 constrainFrameRect(_:to:)
+    /// 把上探的顶边钳回 visibleFrame.maxY，整个窗口被下推一个边距（实测 y 1527→1487），
+    /// 玻璃随之滑进菜单栏底下（「贴不上状态栏」的根因）。本面板自管几何，禁用钳制。
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
 }
 
 /// 面板宿主视图：玻璃区域以外（四周 shadowMargin 阴影边距）不做命中测试，
@@ -13,6 +19,16 @@ private final class PanelHostingView<Content: View>: NSHostingView<Content> {
         let local = convert(point, from: superview)
         let glassRect = bounds.insetBy(dx: Theme.shadowMargin, dy: Theme.shadowMargin)
         return glassRect.contains(local) ? super.hitTest(point) : nil
+    }
+
+    override var safeAreaInsets: NSEdgeInsets {
+        get {
+            // 玻璃要贴住状态栏，窗口顶边必然上探进菜单栏区域（还要给手绘阴影留边距）；
+            // 系统会按上探量给宿主视图顶部安全区 inset，把 SwiftUI 内容整体推低，
+            // 表现为「面板贴不上状态栏、间隙 ≈ shadowMargin」。本面板自管几何，安全区清零。
+            NSEdgeInsets()
+        }
+        set {}
     }
 }
 
@@ -141,9 +157,10 @@ final class PanelController: NSObject, NSWindowDelegate {
         var x = lastIconFrame.midX - w / 2
         x = max(screen.visibleFrame.minX + 8, min(x, screen.visibleFrame.maxX - w - 8))
         // 玻璃顶边 = 窗口顶边 - shadowMargin；窗口顶边锚定 visibleFrame.maxY
-        // （AppKit 定义的菜单栏下缘，即状态栏底边）。不用状态条按钮的 frame：
-        // 其高度/在菜单栏内的位置随系统样式变化，用它对齐会与状态栏之间留出空隙
-        let y = screen.visibleFrame.maxY + Theme.shadowMargin - h
+        // （AppKit 定义的菜单栏下缘，即状态栏底边），再上浮 statusBarGap ——
+        // 玻璃悬停在状态栏下方一点而不直接压住（对齐控制中心式系统弹窗）。
+        // 不用状态条按钮的 frame：其高度/在菜单栏内的位置随系统样式变化，对齐不稳定
+        let y = screen.visibleFrame.maxY + Theme.shadowMargin - Theme.statusBarGap - h
         panel.setFrameOrigin(NSPoint(x: x, y: y))
         dragDebugLog("position icon=\(lastIconFrame) visMaxY=\(screen.visibleFrame.maxY) y=\(y) h=\(h)")
     }

@@ -16,6 +16,10 @@ enum Theme {
     static let shadowBlur: CGFloat = 16      // 阴影模糊半径
     static let shadowOffsetY: CGFloat = 8    // 阴影向下偏移
     static let shadowOpacity: Double = 0.32  // 阴影浓度
+
+    // 面板与状态栏的间隙：玻璃顶边悬停在菜单栏下缘之上，不直接压住
+    // （对齐控制中心等系统状态栏弹窗的呼吸距离；面板定位见 PanelController.positionPanel）
+    static let statusBarGap: CGFloat = 6
 }
 
 /// 液态玻璃圆角背景
