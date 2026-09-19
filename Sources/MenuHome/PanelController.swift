@@ -15,6 +15,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     private var lastIconFrame: NSRect = .zero
 
     private var keyMonitor: Any?
+    private var mouseUpMonitor: Any?
 
     init(store: HomeStore) {
         self.store = store
@@ -42,6 +43,7 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     deinit {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        if let mouseUpMonitor { NSEvent.removeMonitor(mouseUpMonitor) }
     }
 
     // MARK: - 显隐与定位（控制中心式弹出动画）
@@ -153,6 +155,20 @@ final class PanelController: NSObject, NSWindowDelegate {
             return MainActor.assumeIsolated {
                 guard self.panel.isVisible, NSApp.keyWindow === self.panel else { return event }
                 return self.handleKey(event) ?? event
+            }
+        }
+        // 松手兜底：拖拽手势的 onEnded 若被取消/丢失（视图更新竞态等），
+        // 会话将永久卡死 —— 表现为「能拖着走、永远放不下」。
+        // 本地监视器在事件派发前执行；endDrag 幂等（drag 已空则无操作），
+        // 与手势的 onEnded 双保险，松手必然落位。
+        mouseUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
+            guard let self else { return event }
+            return MainActor.assumeIsolated {
+                if self.store.drag != nil {
+                    dragDebugLog("mouseUp 兜底落位（手势 onEnded 未触发）")
+                    self.store.endDrag()
+                }
+                return event
             }
         }
         // 滚轮：桌面为原生滚动网格（不再分页），交给 ScrollView 自行处理

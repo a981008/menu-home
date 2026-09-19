@@ -389,16 +389,23 @@ final class HomeStore: ObservableObject {
     /// 拖影提交节流时间戳（~80fps）
     private var lastGhostCommit: CFTimeInterval = 0
 
+    /// 诊断日志：上一个已记录的落点格（跨格才记录，避免刷屏）
+    private var lastLoggedIdx: Int?
+
     func beginDrag(itemID: String) {
-        guard drag == nil,
-              let idx = flatIndexOf(id: itemID),
-              let item = item(withID: itemID) else { return }
+        guard drag == nil else { return }
+        guard let idx = flatIndexOf(id: itemID), let item = item(withID: itemID) else {
+            dragDebugLog("beginDrag 失败：找不到 \(itemID)")
+            return
+        }
         // 提起：从网格中暂时移除（其余图标立即补位，拖动过程零换位）
         var items = flatItems
         items.remove(at: idx)
         setFlat(items)
         liveIndex = idx
+        lastLoggedIdx = nil
         drag = DragSession(item: item, originIndex: idx, currentIndex: idx)
+        dragDebugLog("beginDrag \(item.displayName) origin=\(idx) editMode=\(editMode)")
     }
 
     /// 拖拽移动中（point 为 homePanel 坐标系）。
@@ -416,16 +423,22 @@ final class HomeStore: ObservableObject {
         // 光标所在格：拖拽项已提起，占用者稳定不动（合并目标不再漂移）；
         // 内容坐标系随滚动一致，滚到哪拖到哪。
         // 落点超出已有条目（网格下方空白）= 追加到末尾
-        if let idx = metrics.index(at: point) {
-            if idx < flatItems.count {
-                liveIndex = idx
-                updateMergeHold(targetID: flatItems[idx].id)
+        let idx = metrics.index(at: point)
+        if let i = idx {
+            if i < flatItems.count {
+                liveIndex = i
+                updateMergeHold(targetID: flatItems[i].id)
             } else {
                 liveIndex = flatItems.count
                 cancelMergeHold()
             }
         } else {
             cancelMergeHold()
+        }
+        // 诊断日志：仅在跨格时记录（避免高频刷屏）
+        if idx != lastLoggedIdx {
+            lastLoggedIdx = idx
+            dragDebugLog("moved p=(\(Int(point.x)),\(Int(point.y))) idx=\(idx.map(String.init) ?? "nil") live=\(liveIndex) count=\(flatItems.count)")
         }
     }
 
@@ -434,9 +447,14 @@ final class HomeStore: ObservableObject {
         holdWork = nil
         holdTargetID = nil
         ghost.started = false
-        guard let d = drag else { return }
+        lastLoggedIdx = nil
+        guard let d = drag else {
+            dragDebugLog("endDrag 时会话已空（可能已被取消）")
+            return
+        }
         drag = nil
         if let mc = d.mergeCandidateID, mc != d.itemID, let target = item(withID: mc) {
+            dragDebugLog("endDrag → merge \(d.item.displayName) → \(target.displayName)")
             performMerge(dragged: d.item, target: target)
             flushPendingPersist()
             return
@@ -446,6 +464,7 @@ final class HomeStore: ObservableObject {
         let idx = max(0, min(liveIndex, items.count))
         items.insert(d.item, at: idx)
         setFlat(items)
+        dragDebugLog("endDrag → insert@\(idx) count=\(items.count)")
         flushPendingPersist()
     }
 
@@ -455,11 +474,13 @@ final class HomeStore: ObservableObject {
         holdWork = nil
         holdTargetID = nil
         ghost.started = false
+        lastLoggedIdx = nil
         guard let d = drag else { return }
         drag = nil
         var items = flatItems
         items.insert(d.item, at: max(0, min(d.originIndex, items.count)))
         setFlat(items)
+        dragDebugLog("cancelDrag → 回原位 \(d.originIndex)")
         flushPendingPersist()
     }
 
@@ -484,6 +505,7 @@ final class HomeStore: ObservableObject {
                 guard let self, var d = self.drag, d.mergeCandidateID != targetID else { return }
                 d.mergeCandidateID = targetID
                 self.drag = d
+                dragDebugLog("mergeHold armed target=\(targetID)")
             }
         }
         holdWork = wi
@@ -554,4 +576,19 @@ final class GhostTracker: ObservableObject {
     @Published var point: CGPoint = .zero
     /// 是否已收到首个移动事件（拖起瞬间避免拖影闪现在原点）
     @Published var started = false
+}
+
+// MARK: - 拖拽诊断日志（临时：定位「无法自定义排列」后移除）
+
+/// 追加一行到 Application Support/MenuHome/drag-debug.log（拖拽均在主线程调用）
+func dragDebugLog(_ s: String) {
+    let path = NSHomeDirectory() + "/Library/Application Support/MenuHome/drag-debug.log"
+    let line = String(format: "%.3f %@\n", CACurrentMediaTime(), s)
+    if FileManager.default.fileExists(atPath: path), let fh = FileHandle(forWritingAtPath: path) {
+        defer { try? fh.close() }
+        fh.seekToEndOfFile()
+        if let d = line.data(using: .utf8) { fh.write(d) }
+    } else {
+        try? line.write(toFile: path, atomically: true, encoding: .utf8)
+    }
 }

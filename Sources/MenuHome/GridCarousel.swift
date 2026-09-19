@@ -14,6 +14,9 @@ struct GridCarousel: View {
         return metrics.topPad + CGFloat(rowsNeeded) * (metrics.cellH + metrics.vGap) - metrics.vGap + 12
     }
 
+    /// 空白按下日志节流（临时诊断）
+    private static var lastBlankLog: CFTimeInterval = 0
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             ZStack(alignment: .topLeading) {
@@ -37,7 +40,11 @@ struct GridCarousel: View {
                             // 按下位置所在格的条目提起（空白处按下不启动拖拽）
                             if let idx = metrics.index(at: v.startLocation),
                                idx < store.flatItems.count {
+                                dragDebugLog("gesture start=\(v.startLocation) → idx=\(idx) → beginDrag")
                                 store.beginDrag(itemID: store.flatItems[idx].id)
+                            } else if CACurrentMediaTime() - Self.lastBlankLog > 1 {
+                                Self.lastBlankLog = CACurrentMediaTime()
+                                dragDebugLog("gesture 空白按下 start=\(v.startLocation) count=\(store.flatItems.count)")
                             }
                         }
                         if store.drag != nil {
@@ -45,6 +52,7 @@ struct GridCarousel: View {
                         }
                     }
                     .onEnded { _ in
+                        dragDebugLog("gesture onEnded hasDrag=\(store.drag != nil)")
                         if store.drag != nil {
                             store.endDrag()
                         }
