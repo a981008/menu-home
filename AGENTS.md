@@ -59,7 +59,8 @@ pgrep -x MenuHome                             # 确认在跑
 
 标准流程：**build（0 error）→ 重启 → 手测 → 提交 → push**。
 
-**版本号单一来源**：仓库根 `VERSION` 文件（如 `1.2.0`）。升级版本只改这一行 —— `build_app.sh` 读取它注入 Info.plist（CFBundleShortVersionString / CFBundleVersion，设置「关于」页从 `Bundle.main` 读显），`make_dmg.sh` 从构建产物 plist 读版本命名 DMG。发版：改 VERSION → build → DMG → 打 `v<版本>` tag → GitHub Release 挂 DMG。
+**版本号单一来源**：仓库根 `VERSION` 文件（如 `1.2.0`）。升级版本只改这一行 —— `build_app.sh` 读取它注入 Info.plist（CFBundleShortVersionString / CFBundleVersion，设置「关于」页从 `Bundle.main` 读显），`make_dmg.sh` 从构建产物 plist 读版本命名 DMG。发版：改 VERSION → build → DMG → 打 `v<版本>` tag → GitHub Release 挂 DMG → **更新 GitHub Pages 站点**（`docs/index.html` 下载按钮的版本文字，链接本身指向 releases/latest 不用改）→ 提交推送。
+⚠️ **发版漏更 Pages = 站点按钮显示旧版本号**（v1.2.1 实际漏过一次）；每次发版把这一步当作 Release 收尾的必做项。
 ⚠️ 本机 macOS 27 上 `hdiutil create` 已弃用且实测损坏（空目录也报「目录非空」），`make_dmg.sh` 已改用 `diskutil image create from`；且磁盘镜像创建会被 DSH 文件沙箱拦截（OSStatus error 1），命令需以完整权限重试才能成功。
 
 提交与推送（环境缺 `GIT_AUTHOR_*` 时）：
