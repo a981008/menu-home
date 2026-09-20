@@ -23,10 +23,14 @@ ln -s /Applications "$STAGE/Applications"
 
 echo "==> [3/4] 生成 $DMG（UDZO 压缩）"
 # 本机 macOS 27 上 hdiutil create 旧语法已弃用且实测损坏（连空目录都报「目录非空」），
-# 改用新 diskutil image create from；旧 hdiutil 仅作老系统兜底
-if diskutil image create from --format UDZO --volumeName "MenuHome" "$STAGE" "$DMG" 2>&1 | grep -v "completed"; then
-  :
-else
+# 改用新 diskutil image create from；旧 hdiutil 仅作老系统兜底。
+# 成败只认 diskutil 自己的退出码 —— 不能借管道里 grep 的退出码判断：
+# 成功输出一旦被「completed」过滤干净，grep 也返回 1，会把成功误判成失败、
+# 错走本机已损坏的 hdiutil（v1.2.1 打包时实际踩到）
+DMG_OUT="$(diskutil image create from --format UDZO --volumeName "MenuHome" "$STAGE" "$DMG" 2>&1)" && DISKUTIL_OK=0 || DISKUTIL_OK=$?
+echo "$DMG_OUT" | grep -v "completed" || true    # 过滤进度噪音，只留有效信息
+if [[ $DISKUTIL_OK -ne 0 ]]; then
+  echo "    diskutil image create 失败（exit $DISKUTIL_OK），回退 hdiutil（老系统兜底）"
   hdiutil create -volname "MenuHome" -srcfolder "$STAGE" -format UDZO -ov "$DMG" > /dev/null
 fi
 rm -rf "$STAGE"
