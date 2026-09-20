@@ -38,12 +38,28 @@ enum AppScanner {
 
     private static var appsCache: [AppEntry]?
 
-    /// 全量 App 列表（带缓存）：搜索覆盖层每次打开都要用，首次扫描后复用，不再重复走盘
+    /// 全量 App 列表（带缓存）：搜索覆盖层每次打开都要用，首次扫描后复用，不再重复走盘。
+    /// 缓存由 rescanSoon() 在面板每次弹出时失效重扫，运行期间新装的 App 也能搜到
     static func cachedApps() -> [AppEntry] {
         if let appsCache { return appsCache }
         let list = scanApps()
         appsCache = list
         return list
+    }
+
+    /// 缓存失效 + 后台重扫：面板每次重新弹出时调用（含收起途中弹回），
+    /// 捕捉 MenuHome 运行期间新装/卸载的 App —— 否则进程级缓存永不更新，
+    /// 新装 App 直到重启 MenuHome 才能搜到（用户实际遇到的 bug）。
+    /// 失效后若用户立刻打开搜索/添加浮层，cachedApps() 会在主线程同步重扫兜底；
+    /// 后台结果回主线程才写回 appsCache，写入全部在主线程，无数据竞争。
+    static func rescanSoon() {
+        appsCache = nil
+        DispatchQueue.global(qos: .userInitiated).async {
+            let list = scanApps()   // 纯读盘 + Bundle 解析，线程安全
+            DispatchQueue.main.async {
+                appsCache = list
+            }
+        }
     }
 
     /// 从路径构造 AppEntry（Finder 拖入 .app 用）；非 .app 或无 bundle id 返回 nil

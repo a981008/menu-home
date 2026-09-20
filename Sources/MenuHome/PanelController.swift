@@ -93,6 +93,7 @@ final class PanelController: NSObject, NSWindowDelegate {
                 closeWork?.cancel()
                 closeWork = nil
                 store.resetTransientState()
+                AppScanner.rescanSoon()         // 弹回也是一次重新可见：重扫本机 App
                 store.panelVisible = true
             } else {
                 hide()
@@ -106,6 +107,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             closeWork = nil
             // 防御性复位：保证每次弹出都是干净状态（不依赖上次关闭路径是否执行了复位）
             store.resetTransientState()
+            AppScanner.rescanSoon()             // 每次弹出后台重扫本机 App，搜索才能看到运行期间新装/卸载的
             store.panelVisible = false          // 首帧以缩小 + 透明状态出现
             panel.makeKeyAndOrderFront(nil)
             DispatchQueue.main.async { [weak self] in
