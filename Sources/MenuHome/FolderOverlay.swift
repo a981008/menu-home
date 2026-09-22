@@ -11,9 +11,11 @@ struct FolderOverlay: View {
         3 * store.metrics.cellW + 2 * store.metrics.hGap + 32
     }
 
-    /// 标题行高与标题—卡片间距（标题在卡片外，布局与 cardZoom 锚点换算共用）
-    private let titleRowHeight: CGFloat = 24
+    /// 标题行高与标题—卡片间距（标题在卡片外）。
+    /// 标题块由「卡片下方的等高隐形补白」平衡（见 content）—— 卡片自身在面板内正中
+    private let titleRowHeight: CGFloat = 28
     private let titleCardGap: CGFloat = 8
+    private var titleBlock: CGFloat { titleRowHeight + titleCardGap }
 
     /// iOS 同款开合动画：从文件夹图标位置缩放展开，收起时缩回图标。
     /// 开 = 带回弹弹簧淡入；收 = 卡片**全程实体**缩回图标、最后 0.12s 才淡出
@@ -22,11 +24,11 @@ struct FolderOverlay: View {
     private var cardZoom: AnyTransition {
         let m = store.metrics
         let src = store.folderSourceRect
-        // 玻璃卡片最终位置：标题在卡片外（上方），「标题 + 卡片」整体在面板内居中，
-        // 因此卡片中心比面板中心低半个标题块
+        // 玻璃卡片最终位置：卡片自身（标准 3×3）在面板内**正中**，
+        // 标题悬浮在卡片上方，由卡片下方的等高隐形补白平衡，不影响居中
         let cardH: CGFloat = 3 * m.cellH + 2 * m.vGap + 12   // 3 行可视网格 + 底距（标题已移出卡片）
         let cardX = (m.pageW - cardWidth) / 2
-        let cardY = (m.panelH - cardH) / 2 + (titleRowHeight + titleCardGap) / 2
+        let cardY = (m.panelH - cardH) / 2
         guard src.width > 0, src.height > 0 else { return .opacity }
         let ax = min(1, max(0, (src.midX - cardX) / cardWidth))
         let ay = min(1, max(0, (src.midY - cardY) / cardH))
@@ -67,7 +69,9 @@ struct FolderOverlay: View {
                 .onTapGesture { store.collapseFolder() }
                 .transition(.opacity)
 
-            // 标题在卡片外（iOS 同款：名称悬浮在卡片上方，不占玻璃卡片内部空间）
+            // 标题在卡片外（iOS 同款：名称悬浮在卡片上方左上角，不占玻璃卡片内部空间）。
+            // VStack 必须钉在 cardWidth：标题的 maxWidth .infinity 是贪婪的，
+            // 不钉住会被 ZStack 撑到整面板宽，左对齐就跑到面板左缘了
             VStack(spacing: titleCardGap) {
                 titleRow(folder: folder)
                     .opacity(contentShown ? 1 : 0)
@@ -81,6 +85,10 @@ struct FolderOverlay: View {
                     .liquidGlass(cornerRadius: Theme.panelRadius)
                     .transition(cardZoom)
             }
+            .frame(width: cardWidth)
+            // 卡片下方的隐形补白 = 标题块等高：让「卡片」本体（标准 3×3）成为
+            // 被居中的主体，精确落在面板正中；标题悬浮在上方，视觉上下对称
+            .padding(.bottom, titleBlock)
             .onAppear {
                 // 卡片弹出后内容再登场（错开 0.12s 的两段节奏）
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.9).delay(0.12)) {
@@ -93,7 +101,7 @@ struct FolderOverlay: View {
         .transition(.identity)
     }
 
-    // MARK: - 标题（在卡片外；点击重命名）
+    // MARK: - 标题（卡片外左上角；点击重命名）
 
     @ViewBuilder
     private func titleRow(folder: FolderEntry) -> some View {
@@ -104,31 +112,26 @@ struct FolderOverlay: View {
                 Button {
                     withAnimation { store.renamingFolderID = folder.id }
                 } label: {
-                    HStack(spacing: 5) {
-                        Text(folder.name)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .background(
-                                // 悬浮在压暗背景上：与桌面图标标签同款「黑字模糊垫」保证可读
-                                Text(folder.name)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                    .foregroundStyle(Color.black.opacity(0.5))
-                                    .blur(radius: 4)
-                            )
-                        Image(systemName: "pencil")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.55))
-                            .shadow(color: .black.opacity(0.4), radius: 2)
-                    }
+                    Text(folder.name)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .background(
+                            // 悬浮在压暗背景上：与桌面图标标签同款「黑字模糊垫」保证可读
+                            Text(folder.name)
+                                .font(.system(size: 20, weight: .semibold))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .foregroundStyle(Color.black.opacity(0.5))
+                                .blur(radius: 4)
+                        )
                 }
                 .buttonStyle(.plain)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .padding(.horizontal, 16)   // 与卡片内图标列左缘对齐
         .frame(height: titleRowHeight)
     }
 
@@ -162,7 +165,8 @@ private struct FolderDisplayEntry: Identifiable {
     let item: HomeItem?
 }
 
-/// 卡片固定 3 列 × 可视 3 行，App 从左上角排起；
+/// 卡片固定 3 列 × 可视 3 行（标准 3×3，卡片本体在面板内正中），App 从左上角
+/// 按「从左到右、从上到下」排起，不足 3×3 底部留白；
 /// 超过 3×3 在卡片内垂直滚动（不再分页），卡片高度恒定；
 /// 卡片内可拖动排序（iOS 式空位让位），拖出卡片 = 移出文件夹回到桌面
 private struct FolderScrollGrid: View {
@@ -373,9 +377,9 @@ private struct RenameField: View {
     var body: some View {
         TextField("文件夹名称", text: _text.projectedValue)
             .textFieldStyle(.plain)
-            .font(.system(size: 15, weight: .semibold))
+            .font(.system(size: 20, weight: .semibold))
             .foregroundStyle(.white)
-            .multilineTextAlignment(.center)
+            .multilineTextAlignment(.leading)
             .focused($focused)
             .onSubmit { commit() }
             .onChange(of: focused) { value in
