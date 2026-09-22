@@ -1,14 +1,35 @@
 import AppKit
 import SwiftUI
 
+/// 文件夹卡片玻璃留白（v1.3 用户调参：**框变大**、图标与桌面同大）：
+/// 卡片在网格四周加固定玻璃留白（28 = 卡片圆角，视觉干净），框比网格大一圈。
+/// 注意几何权衡：框变大后角部图标不再贴角（四角均匀内留白 28+格子留白 20.5/21.5，
+/// 圆弧走向一致）；「图标圆角与卡片圆角同心贴合」要求框贴住网格 ——
+/// 框变大 / 图标同大 / 贴角三者几何上只能同时满足两个，本轮按用户要求取前两个
+private enum FolderCardGeometry {
+    /// 卡片四周玻璃留白（与卡片圆角同值）
+    static let glassInset: CGFloat = 28
+}
+
 /// 文件夹展开覆盖层（面板内，iPhone 同款卡片）
 struct FolderOverlay: View {
     let folderID: UUID
     @EnvironmentObject var store: HomeStore
 
-    /// 卡片宽度：3 列主网格格子 + 2×列距 + 左右各 16pt 内边距（间隔与桌面一致）
+    /// 卡片专用网格（v1.3 用户调参）：**图标与桌面完全一致**（跟随图标大小设置，
+    /// 用户明确要求「图标要和外面的一样大」），仅把间隙收紧 —— 12/14 → 6/6
+    /// （相邻图标可见间距 53/56 → 47/49）；3 列 × 3 行
+    private var folderMetrics: GridMetrics {
+        var m = store.metrics
+        m.hGap = 6
+        m.vGap = 6
+        return m
+    }
+
+    /// 卡片宽度：3 列卡片格子 + 2×列距 + 四周玻璃留白（框比网格大一圈）
     private var cardWidth: CGFloat {
-        3 * store.metrics.cellW + 2 * store.metrics.hGap + 32
+        3 * folderMetrics.cellW + 2 * folderMetrics.hGap
+            + 2 * FolderCardGeometry.glassInset
     }
 
     /// 标题行高与标题—卡片间距（标题在卡片外）。
@@ -24,11 +45,13 @@ struct FolderOverlay: View {
     private var cardZoom: AnyTransition {
         let m = store.metrics
         let src = store.folderSourceRect
-        // 玻璃卡片最终位置：卡片自身（标准 3×3）在面板内**正中**，
-        // 标题悬浮在卡片上方，由卡片下方的等高隐形补白平衡，不影响居中
-        let cardH: CGFloat = 3 * m.cellH + 2 * m.vGap + 12   // 3 行可视网格 + 底距（标题已移出卡片）
+        // 玻璃卡片最终位置：卡片自身（标准 3×3）在「搜索栏下方内容区」内**正中** ——
+        // 视觉居中以搜索栏为顶界（整面板几何中心会显得偏上）；标题悬浮在卡片上方。
+        // 卡高按卡片专用网格（folderMetrics）计算；面板坐标系仍用主 metrics
+        let cardH: CGFloat = 3 * folderMetrics.cellH + 2 * folderMetrics.vGap
+            + 2 * FolderCardGeometry.glassInset
         let cardX = (m.pageW - cardWidth) / 2
-        let cardY = (m.panelH - cardH) / 2
+        let cardY = m.searchBarArea + (m.panelH - m.searchBarArea - cardH) / 2
         guard src.width > 0, src.height > 0 else { return .opacity }
         let ax = min(1, max(0, (src.midX - cardX) / cardWidth))
         let ay = min(1, max(0, (src.midY - cardY) / cardH))
@@ -86,8 +109,10 @@ struct FolderOverlay: View {
                     .transition(cardZoom)
             }
             .frame(width: cardWidth)
-            // 卡片下方的隐形补白 = 标题块等高：让「卡片」本体（标准 3×3）成为
-            // 被居中的主体，精确落在面板正中；标题悬浮在上方，视觉上下对称
+            // 垂直定位：顶部让出搜索栏区域 → 卡片在「搜索栏下方内容区」内居中
+            // （内容区中心比整面板几何中心低 searchBarArea/2，这才是视觉上的居中）；
+            // 底部补白 = 标题块等高，平衡悬浮标题，让卡片本体成为居中主体
+            .padding(.top, store.metrics.searchBarArea)
             .padding(.bottom, titleBlock)
             .onAppear {
                 // 卡片弹出后内容再登场（错开 0.12s 的两段节奏）
@@ -152,7 +177,7 @@ struct FolderOverlay: View {
             .padding(.vertical, 28)
             .padding(.bottom, 10)
         } else {
-            FolderScrollGrid(items: folder.items, folderID: folder.id)
+            FolderScrollGrid(items: folder.items, folderID: folder.id, grid: folderMetrics)
         }
     }
 }
@@ -165,36 +190,27 @@ private struct FolderDisplayEntry: Identifiable {
     let item: HomeItem?
 }
 
-/// 卡片固定 3 列 × 可视 3 行（标准 3×3，卡片本体在面板内正中）；
-/// 条目不足 3×3 时**整组图标在卡片内垂直居中**（顺序仍从左到右、从上到下，底部不留大片空白）；
-/// 超过 3×3 在卡片内垂直滚动（不再分页），卡片高度恒定；
+/// 卡片固定 3 列 × 可视 3 行（标准 3×3，卡片本体在「搜索栏下方内容区」内正中）；
+/// 条目不足 3×3 时**从左上角排起、与 3×3 完全相同**（不做垂直居中 —— 用户要求：
+/// 第一行图标圆角永远贴卡片顶角）；超过 3×3 在卡片内垂直滚动（不再分页），卡片高度恒定；
 /// 卡片内可拖动排序（iOS 式空位让位），拖出卡片 = 移出文件夹回到桌面
 private struct FolderScrollGrid: View {
     let items: [HomeItem]
     let folderID: UUID
+    let grid: GridMetrics
     @EnvironmentObject var store: HomeStore
 
     private let cols = 3
 
-    // 与主网格同一套 metrics：格子、间隙、图标尺寸完全一致（跟随设置的图标大小）
-    private var metrics: GridMetrics { store.metrics }
-    private var iconPt: CGFloat { metrics.cellW - 30 }
+    // 卡片专用网格（格子/图标与桌面一致、间隙收紧，见 FolderOverlay.folderMetrics）；
+    // 拖拽落点换算也用它 —— 格子钉死 cellH 后逐像素严格一致
+    private var iconPt: CGFloat { grid.cellW - 30 }
     private var cardInnerWidth: CGFloat {
-        CGFloat(cols) * metrics.cellW + CGFloat(cols - 1) * metrics.hGap
+        CGFloat(cols) * grid.cellW + CGFloat(cols - 1) * grid.hGap
     }
     /// 卡片内可视高度：固定 3 行（其余滚动）
     private var visibleHeight: CGFloat {
-        3 * metrics.cellH + 2 * metrics.vGap
-    }
-
-    /// 条目不足 3 行时的顶部补白：整组图标在卡片内垂直居中（上下各一半）。
-    /// 按条目数计算、**不随拖拽空位变化** —— 拖拽期间图标不跳动；
-    /// 补白只在 ≤2 行（≤6 个 App）时存在，空位让位最多补到整 3 行，
-    /// 多出的部分只会裁到透明空位格，无视觉损失
-    private var centerPad: CGFloat {
-        let rows = min(3, (items.count + cols - 1) / cols)
-        guard rows < 3 else { return 0 }
-        return CGFloat(3 - rows) * (metrics.cellH + metrics.vGap) / 2
+        3 * grid.cellH + 2 * grid.vGap
     }
 
     // 卡片内拖拽会话（手工脱糖 @State）
@@ -227,32 +243,41 @@ private struct FolderScrollGrid: View {
         ZStack {
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVGrid(
-                    columns: Array(repeating: GridItem(.fixed(metrics.cellW), spacing: metrics.hGap), count: cols),
-                    spacing: metrics.vGap
+                    columns: Array(repeating: GridItem(.fixed(grid.cellW), spacing: grid.hGap), count: cols),
+                    spacing: grid.vGap
                 ) {
                     ForEach(displayItems) { entry in
                         if let item = entry.item {
                             let isDragged = dragItem?.id == item.id
                             FolderItemCell(item: item, folderID: folderID, iconSize: iconPt,
+                                           isDragging: isDragged,
                                            onDragChanged: { pt in handleDrag(itemID: item.id, pt: pt) },
                                            onDragEnded: { pt in handleDrop(item: item, pt: pt) })
+                                // 钉死格子高度 = grid.cellH 且内容顶对齐：
+                                // appCell 自带固定 frame(格宽×格高)，内容在框内居中
+                                //（与桌面同款），3 行正好填满视口；拖拽落点换算按
+                                // cellH 也严格一致
+                                .frame(height: grid.cellH, alignment: .top)
                                 .opacity(isDragged ? 0.25 : 1)
+                                .animation(.easeOut(duration: 0.15), value: store.editMode)
                         } else {
                             // 插入空位：两侧条目让位（iOS 式落点预览）
                             Color.clear
-                                .frame(width: metrics.cellW, height: metrics.cellH)
+                                .frame(width: grid.cellW, height: grid.cellH)
                         }
                     }
                 }
                 .frame(width: cardInnerWidth, alignment: .topLeading)
-                // 不足 3 行时顶部补白 → 整组图标垂直居中；minHeight 把内容钉在顶部（防 ScrollView 居中歧义）
-                .padding(.top, centerPad)
                 .frame(minHeight: visibleHeight, alignment: .top)
             }
             .frame(width: cardInnerWidth, height: visibleHeight)
-            // App 式胶囊滚轴 + 滚动内容与滚轴裁剪进圆角容器（圆角外不露直角）
+            // App 式胶囊滚轴 + 滚动内容与滚轴裁剪进圆角容器（圆角外不露直角）。
+            // 悬停缩放（1.04）会溢出格子 ~1.8pt：ScrollView 自带裁剪会把边缘格子的
+            // 悬停高亮切成平边（与桌面观感不一致的根因）—— 禁掉自身裁剪、把圆角
+            // 裁剪外扩 3pt（仍在四周 28pt 玻璃留白之内），溢出完整渲染
             .appScrollbar()
-            .clipShape(RoundedRectangle(cornerRadius: Theme.scrollClipRadius, style: .continuous))
+            .scrollClipDisabled()
+            .clipShape(RoundedRectangle(cornerRadius: Theme.scrollClipRadius, style: .continuous).inset(by: -3))
             .onScrollGeometryChange(for: CGFloat.self) { geo in
                 geo.contentOffset.y + geo.contentInsets.top
             } action: { _, newValue in
@@ -268,8 +293,10 @@ private struct FolderScrollGrid: View {
         }
         .coordinateSpace(name: "folderCard")
         .frame(width: cardInnerWidth, height: visibleHeight)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
+        // 四周玻璃留白：框比网格大一圈（v1.3 框变大；角部图标不再贴角，四角均匀）
+        .padding(.horizontal, FolderCardGeometry.glassInset)
+        .padding(.top, FolderCardGeometry.glassInset)
+        .padding(.bottom, FolderCardGeometry.glassInset)
     }
 
     // MARK: - 卡片内拖拽（iOS 式：空位跟随光标 + 半格判定；卡片内无合并）
@@ -299,6 +326,14 @@ private struct FolderScrollGrid: View {
             dragItem = it
             // 初始空位在被拖项右侧一格：半透明原格 + 其后留白 = 「已提起」的视觉
             gapIndex = min(fi + 1, max(0, items.count - 1))
+            // 提起即进入整理模式（与桌面 beginDrag 完全同款，iOS 同一行为）；
+            // 并压制 tap，防止拖完松手被当成点按（误多选）
+            store.suppressTapUntil = CACurrentMediaTime() + 0.4
+            if !store.editMode {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    store.editMode = true
+                }
+            }
         }
         dragPoint = pt
         updateGap(at: pt)
@@ -317,17 +352,20 @@ private struct FolderScrollGrid: View {
         }
     }
 
-    /// 点是否在卡片可视区内
+    /// 点是否在卡片（含四周玻璃留白）内 —— 留白也算卡片内部：
+    /// 拖到玻璃边缘内侧松手仍是合法落点（钳到最近的格子），越过玻璃才算拖出
     private func isInsideCard(_ pt: CGPoint) -> Bool {
-        pt.x >= 0 && pt.y >= 0 && pt.x < cardInnerWidth && pt.y < visibleHeight
+        let inset = FolderCardGeometry.glassInset
+        return pt.x >= -inset && pt.y >= -inset
+            && pt.x < cardInnerWidth + inset && pt.y < visibleHeight + inset
     }
 
     /// 光标 → 内容扁平格子索引；拖出卡片（可视区外）返回 nil。
-    /// 手势坐标在卡片空间，内容纵向坐标 = 卡片坐标 + 滚动偏移 − 垂直居中补白
+    /// 手势坐标在卡片空间，内容纵向坐标 = 卡片坐标 + 滚动偏移
     private func localIndex(at pt: CGPoint) -> Int? {
         guard isInsideCard(pt) else { return nil }
-        let col = min(cols - 1, max(0, Int(pt.x / (metrics.cellW + metrics.hGap))))
-        let row = max(0, Int((pt.y + scrollOffset - centerPad) / (metrics.cellH + metrics.vGap)))
+        let col = min(cols - 1, max(0, Int(pt.x / (grid.cellW + grid.hGap))))
+        let row = max(0, Int((pt.y + scrollOffset) / (grid.cellH + grid.vGap)))
         return row * cols + col
     }
 
@@ -340,10 +378,10 @@ private struct FolderScrollGrid: View {
             if gapIndex != nil { withAnimation(gapAnim) { gapIndex = nil } }
             return
         }
-        let col = min(cols - 1, max(0, Int(pt.x / (metrics.cellW + metrics.hGap))))
-        let row = max(0, Int((pt.y + scrollOffset - centerPad) / (metrics.cellH + metrics.vGap)))
+        let col = min(cols - 1, max(0, Int(pt.x / (grid.cellW + grid.hGap))))
+        let row = max(0, Int((pt.y + scrollOffset) / (grid.cellH + grid.vGap)))
         let k = row * cols + col
-        let after = pt.x > CGFloat(col) * (metrics.cellW + metrics.hGap) + metrics.cellW / 2
+        let after = pt.x > CGFloat(col) * (grid.cellW + grid.hGap) + grid.cellW / 2
         let h = after ? (k < from ? k + 1 : k)
                       : (k <= from ? k : k - 1)
         let g = max(0, min(h, max(0, items.count - 1)))
@@ -352,8 +390,10 @@ private struct FolderScrollGrid: View {
         }
     }
 
+    /// 卡片内拖影：与桌面 DragGhostView 完全同款（液态玻璃胶囊 + scale 1.1，
+    /// 无黑投影 —— 立体感来自玻璃材质本身；此前是厚材质 + 黑阴影，观感不一致）
     private func ghost(for item: HomeItem) -> some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 4) {
             if let e = item.appEntry {
                 Image(nsImage: AppScanner.cachedIcon(forPath: e.path))
                     .resizable()
@@ -366,10 +406,11 @@ private struct FolderScrollGrid: View {
                 .font(.system(size: 11, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .foregroundStyle(.primary)
         }
-        .padding(6)
-        .background(RoundedRectangle(cornerRadius: 10).fill(.ultraThinMaterial))
-        .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
+        .padding(8)
+        .liquidGlass(cornerRadius: Theme.ghostRadius)
+        .scaleEffect(1.1)
     }
 }
 
@@ -419,6 +460,8 @@ private struct FolderItemCell: View {
     let item: HomeItem
     let folderID: UUID
     var iconSize: CGFloat = 48
+    /// 本格正在被拖拽（原格半透明、不抖动）
+    var isDragging: Bool = false
     var onDragChanged: ((CGPoint) -> Void)? = nil
     var onDragEnded: ((CGPoint) -> Void)? = nil
     @EnvironmentObject var store: HomeStore
@@ -426,6 +469,14 @@ private struct FolderItemCell: View {
     private var hovering: Bool {
         get { _hovering.wrappedValue }
         nonmutating set { _hovering.wrappedValue = newValue }
+    }
+
+    /// 本格被多选（整理模式，与桌面 CellView 同一套 selectedIDs）
+    private var isSelected: Bool { store.selectedIDs.contains(item.id) }
+
+    /// 稳定伪随机种子 0...1（与桌面同款抖动相位，由 item id 哈希而来）
+    private var seed: Double {
+        Double(UInt(bitPattern: item.id.hashValue) % 100) / 100
     }
 
     var body: some View {
@@ -437,27 +488,42 @@ private struct FolderItemCell: View {
             }
         }
         .frame(maxWidth: .infinity)
+        // 整理模式抖动与桌面完全一致（iOS 文件夹展开后同样抖动）
+        .modifier(JiggleModifier(active: store.editMode && !isDragging,
+                                 seed: seed,
+                                 reduceMotion: store.reduceMotion))
     }
 
     @ViewBuilder
     private func appCell(_ entry: AppEntry) -> some View {
+        // 内容结构与桌面 AppCellView 完全一致：VStack(spacing: 4){图标; 标签}，
+        // 由下方固定 frame(格宽×格高) 自动居中 —— 图标上方 = 标签下方留空（各约 7.5pt），
+        // 与桌面格子内部布局逐点相同；不再使用「图标下沉」结构（那是为第三行图标
+        // 圆角同心设计的，但导致框内上 16.5 / 下 0.5 的不居中，用户要求与桌面一致）
         VStack(spacing: 4) {
             ZStack(alignment: .topLeading) {
                 Image(nsImage: AppScanner.cachedIcon(forPath: entry.path))
                     .resizable()
                     .frame(width: iconSize, height: iconSize)
 
+                // 整理模式角标：与桌面 CellView.editBadge 完全同款（红 ⊖ 移出 / 蓝 ✓ 已选），
+                // 悬在图标左上角相同相对位（桌面角标中心 = 图标角内 (0, 6)，此处一致）
                 if store.editMode {
                     Button {
-                        store.removeFromFolder(itemID: item.id, folderID: folderID)
+                        if isSelected {
+                            store.toggleSelected(id: item.id)
+                        } else {
+                            store.removeFromFolder(itemID: item.id, folderID: folderID)
+                        }
                     } label: {
-                        Image(systemName: "minus.circle.fill")
-                            .font(.system(size: 15))
-                            .foregroundStyle(.secondary, Color(nsColor: .controlBackgroundColor))
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "minus.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.white, isSelected ? Color.accentColor : Color.red)
                     }
                     .buttonStyle(.plain)
-                    .offset(x: -6, y: -6)
-                    .help("移出文件夹")
+                    .offset(x: -8, y: -2)
+                    .transition(.scale.combined(with: .opacity))
+                    .help(isSelected ? "取消选择" : "移出文件夹")
                 }
             }
             Text(entry.name)
@@ -475,14 +541,25 @@ private struct FolderItemCell: View {
                         .blur(radius: 4)
                 )
         }
-        .padding(6)
+        // 悬停框与桌面 CellView 完全一致：套在固定「格宽×格高」frame 上 ——
+        // 否则框随标签自然宽度收缩（短名 App 的框窄成长方形、逐格不同）；
+        // 内容在此 frame 内居中（与桌面 AppCellView 同款）
+        .frame(width: iconSize + 30, height: iconSize + 32)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(hovering ? 0.06 : 0)))
         .scaleEffect(hovering && !store.editMode ? 1.04 : 1)
+        // 已选压暗：与桌面 CellView 同款（0.85）
+        .opacity(isSelected ? 0.85 : 1)
         .animation(.easeInOut(duration: 0.12), value: hovering)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture {
-            guard !store.editMode else { return }
+            // 拖完松手 / 长按松手不算点按（与桌面 CellView.tap 同款防护）
+            if CACurrentMediaTime() < store.suppressTapUntil { return }
+            if store.editMode {
+                // 整理模式：点格子本体 = 多选切换（与桌面一致）
+                withAnimation(.easeInOut(duration: 0.15)) { store.toggleSelected(id: item.id) }
+                return
+            }
             store.launch(entry)
         }
         .contextMenu {

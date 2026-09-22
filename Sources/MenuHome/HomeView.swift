@@ -75,7 +75,7 @@ struct HomeView: View {
                 EmptyStateView()
             }
 
-            // 编辑模式提示条（浮在顶部；有覆盖层时随桌面一起隐藏）
+            // 编辑模式提示条（浮在顶部；覆盖层展开时随桌面一起隐藏）
             if store.editMode && !dim {
                 EditBar()
             }
@@ -83,6 +83,12 @@ struct HomeView: View {
             // 文件夹展开覆盖层（另一模块实现；开合动画在卡片内部以图标为锚点）
             if let fid = store.expandedFolderID {
                 FolderOverlay(folderID: fid)
+            }
+
+            // 卡片内的编辑条（v1.3：卡片内多选与桌面同款）——
+            // 必须盖在卡片浮层之上，「移出 / ✓完成」才点得到
+            if store.editMode, store.expandedFolderID != nil {
+                EditBar()
             }
 
             // 搜索覆盖层（另一模块实现）

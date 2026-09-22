@@ -386,6 +386,17 @@ final class HomeStore: ObservableObject {
         }
     }
 
+    /// 整理模式批量「移出文件夹」：选中项全部回到桌面末尾（卡片内多选的删除键）
+    func removeSelectedFromFolder(_ folderID: UUID) {
+        guard drag == nil, !selectedIDs.isEmpty else { return }
+        // 先收集再逐个移除（removeFromFolder 不动 selectedIDs，逐个调用安全）
+        let ids = selectedIDs
+        for id in ids {
+            removeFromFolder(itemID: id, folderID: folderID)
+        }
+        selectedIDs = []
+    }
+
     func sortByName() {
         var items = flatItems
         items.sort { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
