@@ -165,8 +165,8 @@ private struct FolderDisplayEntry: Identifiable {
     let item: HomeItem?
 }
 
-/// 卡片固定 3 列 × 可视 3 行（标准 3×3，卡片本体在面板内正中），App 从左上角
-/// 按「从左到右、从上到下」排起，不足 3×3 底部留白；
+/// 卡片固定 3 列 × 可视 3 行（标准 3×3，卡片本体在面板内正中）；
+/// 条目不足 3×3 时**整组图标在卡片内垂直居中**（顺序仍从左到右、从上到下，底部不留大片空白）；
 /// 超过 3×3 在卡片内垂直滚动（不再分页），卡片高度恒定；
 /// 卡片内可拖动排序（iOS 式空位让位），拖出卡片 = 移出文件夹回到桌面
 private struct FolderScrollGrid: View {
@@ -185,6 +185,16 @@ private struct FolderScrollGrid: View {
     /// 卡片内可视高度：固定 3 行（其余滚动）
     private var visibleHeight: CGFloat {
         3 * metrics.cellH + 2 * metrics.vGap
+    }
+
+    /// 条目不足 3 行时的顶部补白：整组图标在卡片内垂直居中（上下各一半）。
+    /// 按条目数计算、**不随拖拽空位变化** —— 拖拽期间图标不跳动；
+    /// 补白只在 ≤2 行（≤6 个 App）时存在，空位让位最多补到整 3 行，
+    /// 多出的部分只会裁到透明空位格，无视觉损失
+    private var centerPad: CGFloat {
+        let rows = min(3, (items.count + cols - 1) / cols)
+        guard rows < 3 else { return 0 }
+        return CGFloat(3 - rows) * (metrics.cellH + metrics.vGap) / 2
     }
 
     // 卡片内拖拽会话（手工脱糖 @State）
@@ -235,6 +245,9 @@ private struct FolderScrollGrid: View {
                     }
                 }
                 .frame(width: cardInnerWidth, alignment: .topLeading)
+                // 不足 3 行时顶部补白 → 整组图标垂直居中；minHeight 把内容钉在顶部（防 ScrollView 居中歧义）
+                .padding(.top, centerPad)
+                .frame(minHeight: visibleHeight, alignment: .top)
             }
             .frame(width: cardInnerWidth, height: visibleHeight)
             // App 式胶囊滚轴 + 滚动内容与滚轴裁剪进圆角容器（圆角外不露直角）
@@ -310,11 +323,11 @@ private struct FolderScrollGrid: View {
     }
 
     /// 光标 → 内容扁平格子索引；拖出卡片（可视区外）返回 nil。
-    /// 手势坐标在卡片空间，内容纵向坐标 = 卡片坐标 + 滚动偏移
+    /// 手势坐标在卡片空间，内容纵向坐标 = 卡片坐标 + 滚动偏移 − 垂直居中补白
     private func localIndex(at pt: CGPoint) -> Int? {
         guard isInsideCard(pt) else { return nil }
         let col = min(cols - 1, max(0, Int(pt.x / (metrics.cellW + metrics.hGap))))
-        let row = max(0, Int((pt.y + scrollOffset) / (metrics.cellH + metrics.vGap)))
+        let row = max(0, Int((pt.y + scrollOffset - centerPad) / (metrics.cellH + metrics.vGap)))
         return row * cols + col
     }
 
@@ -328,7 +341,7 @@ private struct FolderScrollGrid: View {
             return
         }
         let col = min(cols - 1, max(0, Int(pt.x / (metrics.cellW + metrics.hGap))))
-        let row = max(0, Int((pt.y + scrollOffset) / (metrics.cellH + metrics.vGap)))
+        let row = max(0, Int((pt.y + scrollOffset - centerPad) / (metrics.cellH + metrics.vGap)))
         let k = row * cols + col
         let after = pt.x > CGFloat(col) * (metrics.cellW + metrics.hGap) + metrics.cellW / 2
         let h = after ? (k < from ? k + 1 : k)
