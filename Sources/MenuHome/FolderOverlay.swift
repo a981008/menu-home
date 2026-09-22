@@ -11,6 +11,10 @@ struct FolderOverlay: View {
         3 * store.metrics.cellW + 2 * store.metrics.hGap + 32
     }
 
+    /// 标题行高与标题—卡片间距（标题在卡片外，布局与 cardZoom 锚点换算共用）
+    private let titleRowHeight: CGFloat = 24
+    private let titleCardGap: CGFloat = 8
+
     /// iOS 同款开合动画：从文件夹图标位置缩放展开，收起时缩回图标。
     /// 开 = 带回弹弹簧淡入；收 = 卡片**全程实体**缩回图标、最后 0.12s 才淡出
     /// （「缩进图标」而不是「边缩边隐」——边缩边隐是生硬感主因）。
@@ -18,10 +22,11 @@ struct FolderOverlay: View {
     private var cardZoom: AnyTransition {
         let m = store.metrics
         let src = store.folderSourceRect
-        // 卡片最终位置（面板内正中）
-        let cardH: CGFloat = 44 + 3 * m.cellH + 2 * m.vGap + 12   // 标题 + 3 行可视网格 + 底距
+        // 玻璃卡片最终位置：标题在卡片外（上方），「标题 + 卡片」整体在面板内居中，
+        // 因此卡片中心比面板中心低半个标题块
+        let cardH: CGFloat = 3 * m.cellH + 2 * m.vGap + 12   // 3 行可视网格 + 底距（标题已移出卡片）
         let cardX = (m.pageW - cardWidth) / 2
-        let cardY = (m.panelH - cardH) / 2
+        let cardY = (m.panelH - cardH) / 2 + (titleRowHeight + titleCardGap) / 2
         guard src.width > 0, src.height > 0 else { return .opacity }
         let ax = min(1, max(0, (src.midX - cardX) / cardWidth))
         let ay = min(1, max(0, (src.midY - cardY) / cardH))
@@ -62,18 +67,20 @@ struct FolderOverlay: View {
                 .onTapGesture { store.collapseFolder() }
                 .transition(.opacity)
 
-            VStack(spacing: 0) {
+            // 标题在卡片外（iOS 同款：名称悬浮在卡片上方，不占玻璃卡片内部空间）
+            VStack(spacing: titleCardGap) {
                 titleRow(folder: folder)
+                    .opacity(contentShown ? 1 : 0)
+                    .transition(.opacity.animation(.easeIn(duration: 0.25)))
+
                 itemArea(folder: folder)
+                    .opacity(contentShown ? 1 : 0)
+                    .scaleEffect(contentShown ? 1 : 0.92)
+                    .transition(.opacity.animation(.easeIn(duration: 0.25)))
+                    .frame(width: cardWidth)
+                    .liquidGlass(cornerRadius: Theme.panelRadius)
+                    .transition(cardZoom)
             }
-            // iOS 同款两段式开合：卡片缩放弹出时内容先隐着，随后从 92% 淡入；
-            // 收起时内容先淡出（转场自带时序），空玻璃卡片再实体缩回图标
-            .opacity(contentShown ? 1 : 0)
-            .scaleEffect(contentShown ? 1 : 0.92)
-            .transition(.opacity.animation(.easeIn(duration: 0.25)))
-            .frame(width: cardWidth)
-            .liquidGlass(cornerRadius: Theme.panelRadius)
-            .transition(cardZoom)
             .onAppear {
                 // 卡片弹出后内容再登场（错开 0.12s 的两段节奏）
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.9).delay(0.12)) {
@@ -86,7 +93,7 @@ struct FolderOverlay: View {
         .transition(.identity)
     }
 
-    // MARK: - 标题（点击重命名）
+    // MARK: - 标题（在卡片外；点击重命名）
 
     @ViewBuilder
     private func titleRow(folder: FolderEntry) -> some View {
@@ -97,19 +104,32 @@ struct FolderOverlay: View {
                 Button {
                     withAnimation { store.renamingFolderID = folder.id }
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 5) {
                         Text(folder.name)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .background(
+                                // 悬浮在压暗背景上：与桌面图标标签同款「黑字模糊垫」保证可读
+                                Text(folder.name)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                    .foregroundStyle(Color.black.opacity(0.5))
+                                    .blur(radius: 4)
+                            )
                         Image(systemName: "pencil")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .shadow(color: .black.opacity(0.4), radius: 2)
                     }
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity)
             }
         }
-        .frame(height: 44)
+        .frame(height: titleRowHeight)
     }
 
     // MARK: - 内容网格（固定 3 列可视 3 行，从左上角排起，超出在卡片内滚动）
@@ -353,7 +373,8 @@ private struct RenameField: View {
     var body: some View {
         TextField("文件夹名称", text: _text.projectedValue)
             .textFieldStyle(.plain)
-            .font(.system(size: 13, weight: .semibold))
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(.white)
             .multilineTextAlignment(.center)
             .focused($focused)
             .onSubmit { commit() }
@@ -364,6 +385,8 @@ private struct RenameField: View {
                 text = initial
                 focused = true
             }
+            // 输入框同样悬浮在压暗背景上：白字 + 轻微黑晕保证可读（瞬时状态）
+            .shadow(color: .black.opacity(0.45), radius: 3)
     }
 
     private func commit() {
